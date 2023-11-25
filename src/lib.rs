@@ -4,7 +4,7 @@ use pulse::context::{Context, FlagSet as ContextFlagSet, State};
 use pulse::def::Retval;
 use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::Proplist;
-use pulse::volume::{ChannelVolumes, Volume, VolumeDB, VolumeLinear};
+use pulse::volume::{ChannelVolumes, Volume, VolumeDB};
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -109,17 +109,13 @@ impl Pulse {
         let sender = self.vol_sender.clone();
         let op = self.introspector.borrow().get_sink_info_list(move |info| {
             println!("In the get server info callback.");
-            let result = print_sink_info(info, 5).expect("Got none instead of some from sink_info");
-            sender.send(result);
+            if let Some(sink_data) = print_sink_info(info, 5) {
+                sender
+                    .send(sink_data)
+                    .expect("Unable to send message to receiver");
+            }
         });
         loop {
-            match self.mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    eprintln!("Iterate state was not success, quitting...");
-                    return;
-                }
-                IterateResult::Success(_) => {}
-            }
             match op.get_state() {
                 pulse::operation::State::Running => (),
                 pulse::operation::State::Cancelled => {

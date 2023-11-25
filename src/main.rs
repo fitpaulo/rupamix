@@ -1,5 +1,5 @@
 use clap::Parser;
-use ffi_learn::Pulse;
+use rupamix::Pulse;
 
 #[derive(Parser)]
 #[command(name = "Rust Pulse Mixer")]
@@ -8,27 +8,29 @@ use ffi_learn::Pulse;
 #[command(about, long_about = None)]
 struct Cli {
     #[arg(short, long)]
-    mute: bool,
+    toggle_mute: bool,
 
     #[arg(short, long)]
-    unmute: bool,
+    increase: Option<u8>,
 
-    #[arg(long)]
-    server: bool,
+    #[arg(short, long)]
+    decrease: Option<u8>,
 }
 
 fn main() {
     let cli = Cli::parse();
 
-    if cli.mute {
+    if cli.toggle_mute {
         println!("Add code to mute.")
     }
 
-    if cli.unmute {
-        println!("Add code to unmute.")
+    if let Some(_increment) = cli.increase {
+        let mut pulse = Pulse::connect_to_pulse().unwrap();
+        pulse.get_sink_info();
+        pulse.update_volume();
     }
 
-    if cli.server {
+    if let Some(_increment) = cli.decrease {
         let mut pulse = Pulse::connect_to_pulse().unwrap();
         pulse.get_sink_info();
         pulse.update_volume();
