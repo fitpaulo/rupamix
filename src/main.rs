@@ -2,7 +2,7 @@ use clap::Parser;
 use ffi_learn::Pulse;
 
 #[derive(Parser)]
-#[command(name = "Rust PA Mixer")]
+#[command(name = "Rust Pulse Mixer")]
 #[command(author = "Paulo Guimaraes <paulotechusa@proton.me>")]
 #[command(version = option_env!("CARGO_PKG_VERSION"))]
 #[command(about, long_about = None)]
