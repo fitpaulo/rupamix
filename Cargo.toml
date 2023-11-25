@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.4.8", features = ["derive"] }
 pulse = {version = "2.28.1", package = "libpulse-binding"}
+simple_logger = { version="4.3.0", features = ["stderr"] }
+log = { version="0.4.20" }
+
