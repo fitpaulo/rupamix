@@ -22,6 +22,8 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
+    let mut pulse = Pulse::connect_to_pulse().unwrap();
+    pulse.sync();
 
     if cli.verbose >= 2 {
         simple_logger::init_with_level(log::Level::Debug).unwrap();
@@ -37,12 +39,10 @@ fn main() {
     }
 
     if let Some(_increment) = cli.increase {
-        let mut pulse = Pulse::connect_to_pulse().unwrap();
-        pulse.get_sink_info();
+        log::info!("Todo!")
     }
 
     if let Some(_increment) = cli.decrease {
-        let mut pulse = Pulse::connect_to_pulse().unwrap();
-        pulse.get_sink_info();
+        log::info!("Todo!")
     }
 }

@@ -7,7 +7,6 @@ use pulse::def::Retval;
 use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::Proplist;
 use pulse::volume::{ChannelVolumes, Volume, VolumeDB};
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -17,8 +16,8 @@ use Message::*;
 struct SinkSource(u32, String);
 
 enum Message {
-    Sink(Rc<Vec<SinkSource>>),
-    Source(Rc<Vec<SinkSource>>),
+    Sink(Rc<RefCell<Vec<SinkSource>>>),
+    Source(Rc<RefCell<Vec<SinkSource>>>),
     Vol(u32, ChannelVolumes),
     ServerInfo(MyServerInfo),
 }
@@ -30,8 +29,8 @@ pub struct Pulse {
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
-    // sinks: Option<Rc<Vec<SinkSource>>>,
-    // sources: Option<Rc<RefCell<Vec<SinkSource>>>>,
+    sinks: Option<Rc<RefCell<Vec<SinkSource>>>>,
+    sources: Option<Rc<RefCell<Vec<SinkSource>>>>,
 }
 
 impl Pulse {
@@ -93,32 +92,38 @@ impl Pulse {
             introspector,
             sender,
             receiver,
-            // sinks: None,
-            // sources: None,
+            sinks: None,
+            sources: None,
             server_info: None,
         })
+    }
+
+    pub fn sync(&mut self) {
+        self.get_server_info();
+        self.get_soruce_info();
+        self.get_sink_info();
     }
 
     fn update_server_info(&mut self, info: MyServerInfo) {
         self.server_info = Some(info);
     }
 
-    // fn update_sinks(&mut self, sinks: Rc<RefCell<Vec<SinkSource>>>) {
-    //     self.sinks = Some(sinks);
-    // }
+    fn update_sinks(&mut self, sinks: Rc<RefCell<Vec<SinkSource>>>) {
+        self.sinks = Some(sinks);
+    }
 
-    // fn update_sources(&mut self, sources: Rc<RefCell<Vec<SinkSource>>>) {
-    //     self.sinks = Some(sources);
-    // }
+    fn update_sources(&mut self, sources: Rc<RefCell<Vec<SinkSource>>>) {
+        self.sinks = Some(sources);
+    }
 
     fn process_message(&mut self) {
         let message = self.receiver.recv().unwrap();
         match message {
             Sink(sink_list) => {
-                // self.update_sinks(sink_list);
+                self.update_sinks(sink_list);
             }
             Source(source_list) => {
-                // self.update_sources(source_list);
+                self.update_sources(source_list);
             }
             ServerInfo(info) => {
                 self.update_server_info(info);
@@ -186,87 +191,91 @@ impl Pulse {
         self.process_message();
     }
 
-    // pub fn get_soruce_info(&mut self) {
-    //     let mut sources = Rc::new(RefCell::new(Vec::new()));
-    //     let sender = self.sender.clone();
+    pub fn get_soruce_info(&mut self) {
+        let sources = Rc::new(RefCell::new(Vec::new()));
+        let sender = self.sender.clone();
 
-    //     let op = self
-    //         .introspector
-    //         .borrow()
-    //         .get_source_info_list(move |result| {
-    //             match result {
-    //                 ListResult::Item(info) => {
-    //                     let name = info.name.as_ref().unwrap().to_string();
-    //                     let idx = info.index;
-    //                     sources.borrow_mut().push(SinkSource(idx, name))
-    //                 }
-    //                 ListResult::Error => {}
-    //                 ListResult::End => {}
-    //             }
-    //             sender.send(Source(sources));
-    //         });
+        let op = self
+            .introspector
+            .borrow()
+            .get_source_info_list(move |result| {
+                match result {
+                    ListResult::Item(info) => {
+                        let name = info.name.as_ref().unwrap().to_string();
+                        let idx = info.index;
+                        sources.borrow_mut().push(SinkSource(idx, name))
+                    }
+                    ListResult::Error => {}
+                    ListResult::End => {}
+                }
+                sender
+                    .send(Source(sources.clone()))
+                    .expect("Unable to send Source Message");
+            });
 
-    //     loop {
-    //         // This top loop must be there, it must get some upate that makes the second match statement work
-    //         match self.mainloop.borrow_mut().iterate(false) {
-    //             IterateResult::Quit(_) | IterateResult::Err(_) => {
-    //                 log::error!("Iterate state was not success, quitting...");
-    //                 return;
-    //             }
-    //             IterateResult::Success(_) => {}
-    //         }
-    //         match op.get_state() {
-    //             pulse::operation::State::Running => (),
-    //             pulse::operation::State::Cancelled => {
-    //                 log::error!("Operation cancelled.");
-    //                 return;
-    //             }
-    //             pulse::operation::State::Done => break,
-    //         }
-    //     }
-    //     self.process_message();
-    // }
+        loop {
+            // This top loop must be there, it must get some upate that makes the second match statement work
+            match self.mainloop.borrow_mut().iterate(false) {
+                IterateResult::Quit(_) | IterateResult::Err(_) => {
+                    log::error!("Iterate state was not success, quitting...");
+                    return;
+                }
+                IterateResult::Success(_) => {}
+            }
+            match op.get_state() {
+                pulse::operation::State::Running => (),
+                pulse::operation::State::Cancelled => {
+                    log::error!("Operation cancelled.");
+                    return;
+                }
+                pulse::operation::State::Done => break,
+            }
+        }
+        self.process_message();
+    }
 
-    // pub fn get_sink_info(&mut self) {
-    //     let mut sinks = Rc::new(RefCell::new(Vec::new()));
-    //     let sender = self.sender.clone();
+    pub fn get_sink_info(&mut self) {
+        let sinks = Rc::new(RefCell::new(Vec::new()));
+        let sender = self.sender.clone();
 
-    //     let op = self
-    //         .introspector
-    //         .borrow()
-    //         .get_sink_info_list(move |result| {
-    //             match result {
-    //                 ListResult::Item(info) => {
-    //                     let name = info.name.as_ref().unwrap().to_string();
-    //                     let idx = info.index;
-    //                     sinks.borrow_mut().push(SinkSource(idx, name))
-    //                 }
-    //                 ListResult::Error => {}
-    //                 ListResult::End => {}
-    //             }
-    //             sender.send(Sink(sinks));
-    //         });
+        let op = self
+            .introspector
+            .borrow()
+            .get_sink_info_list(move |result| {
+                match result {
+                    ListResult::Item(info) => {
+                        let name = info.name.as_ref().unwrap().to_string();
+                        let idx = info.index;
+                        sinks.borrow_mut().push(SinkSource(idx, name))
+                    }
+                    ListResult::Error => {}
+                    ListResult::End => {}
+                }
+                sender
+                    .send(Sink(sinks.clone()))
+                    .expect("Unable to send Sink Message.");
+            });
 
-    //     loop {
-    //         // This top loop must be there, it must get some upate that makes the second match statement work
-    //         match self.mainloop.borrow_mut().iterate(false) {
-    //             IterateResult::Quit(_) | IterateResult::Err(_) => {
-    //                 log::error!("Iterate state was not success, quitting...");
-    //                 return;
-    //             }
-    //             IterateResult::Success(_) => {}
-    //         }
-    //         match op.get_state() {
-    //             pulse::operation::State::Running => (),
-    //             pulse::operation::State::Cancelled => {
-    //                 log::error!("Operation cancelled.");
-    //                 return;
-    //             }
-    //             pulse::operation::State::Done => break,
-    //         }
-    //     }
-    //     self.process_message();
-    // }
+        loop {
+            // This top loop must be there, it must get some upate that makes the second match statement work
+            match self.mainloop.borrow_mut().iterate(false) {
+                IterateResult::Quit(_) | IterateResult::Err(_) => {
+                    log::error!("Iterate state was not success, quitting...");
+                    return;
+                }
+                IterateResult::Success(_) => {}
+            }
+            match op.get_state() {
+                pulse::operation::State::Running => (),
+                pulse::operation::State::Cancelled => {
+                    log::error!("Operation cancelled.");
+                    return;
+                }
+                pulse::operation::State::Done => break,
+            }
+        }
+        self.process_message();
+    }
 
     pub fn shutdown(&mut self) {
         self.mainloop.borrow_mut().quit(Retval(0));
