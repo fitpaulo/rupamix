@@ -13,6 +13,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
+#[derive(Debug)]
 struct SinkSource(u32, String);
 
 enum Message {
@@ -20,6 +21,7 @@ enum Message {
     Source(Rc<RefCell<Vec<SinkSource>>>),
     Vol(u32, ChannelVolumes),
     ServerInfo(MyServerInfo),
+    Empty,
 }
 
 pub struct Pulse {
@@ -99,9 +101,72 @@ impl Pulse {
     }
 
     pub fn sync(&mut self) {
+        log::debug!("Syncing server info");
         self.get_server_info();
+        log::debug!("Syncing source info");
         self.get_soruce_info();
+        log::debug!("Syncing sink info");
         self.get_sink_info();
+    }
+
+    pub fn print_sources(&self) {
+        let mut len_idx = 0;
+        let mut len_name = 0;
+
+        for source in self.sources.as_ref().unwrap().borrow().deref() {
+            let len = source.0.to_string().len();
+            if len > len_idx {
+                len_idx = len;
+            }
+            let len = source.1.len();
+            if len > len_name {
+                len_name = len;
+            }
+        }
+
+        len_idx += 10; // len of '(default) '
+        let sum = len_idx + len_name;
+
+        println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
+        println!("{:-<sum$}", "");
+        for source in self.sources.as_ref().unwrap().borrow().deref() {
+            if source.1 == self.server_info.as_ref().unwrap().default_source_name {
+                let idx = format!("(default) {}", source.0);
+                println!("{:>len_idx$} -- {:<len_name$}", idx, source.1);
+            } else {
+                println!("{:>len_idx$} -- {:<len_name$}", source.0, source.1);
+            }
+        }
+    }
+
+    pub fn print_sinks(&self) {
+        let mut len_idx = 0;
+        let mut len_name = 0;
+
+        for sink in self.sinks.as_ref().unwrap().borrow().deref() {
+            let len = sink.0.to_string().len();
+            if len > len_idx {
+                len_idx = len;
+            }
+            let len = sink.1.len();
+            if len > len_name {
+                len_name = len;
+            }
+        }
+
+        len_idx += 10; // len of '(default) '
+        let sum = len_idx + len_name;
+
+        println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
+        println!("{:-<sum$}", "");
+        for sink in self.sinks.as_ref().unwrap().borrow().deref() {
+            if sink.1 == self.server_info.as_ref().unwrap().default_sink_name {
+                let idx = format!("(default) {}", sink.0);
+                println!("{:>len_idx$} -- {:<len_name$}", idx, sink.1);
+            } else {
+                println!("{:>len_idx$} -- {:<len_name$}", sink.0, sink.1);
+            }
+        }
     }
 
     fn update_server_info(&mut self, info: MyServerInfo) {
@@ -113,22 +178,34 @@ impl Pulse {
     }
 
     fn update_sources(&mut self, sources: Rc<RefCell<Vec<SinkSource>>>) {
-        self.sinks = Some(sources);
+        self.sources = Some(sources);
     }
 
     fn process_message(&mut self) {
-        let message = self.receiver.recv().unwrap();
-        match message {
-            Sink(sink_list) => {
-                self.update_sinks(sink_list);
+        loop {
+            let message = self.receiver.try_recv().unwrap_or(Message::Empty);
+
+            match message {
+                Sink(sink_list) => {
+                    // println!("In Sink path");
+                    self.update_sinks(sink_list);
+                }
+                Source(source_list) => {
+                    // println!("In Source path");
+                    self.update_sources(source_list);
+                }
+                ServerInfo(info) => {
+                    // println!("In serve info path");
+                    self.update_server_info(info);
+                }
+                Vol(index, volume) => {
+                    // println!("In Vol path");
+                    self.update_volume(index, &volume);
+                }
+                Empty => {
+                    break;
+                }
             }
-            Source(source_list) => {
-                self.update_sources(source_list);
-            }
-            ServerInfo(info) => {
-                self.update_server_info(info);
-            }
-            Vol(index, volume) => self.update_volume(index, &volume),
         }
     }
 
@@ -164,7 +241,7 @@ impl Pulse {
         }
     }
 
-    pub fn get_server_info(&mut self) {
+    fn get_server_info(&mut self) {
         let sender = self.sender.clone();
         let op = self.introspector.borrow().get_server_info(move |info| {
             let server_info = MyServerInfo::new(info);
@@ -191,7 +268,8 @@ impl Pulse {
         self.process_message();
     }
 
-    pub fn get_soruce_info(&mut self) {
+    fn get_soruce_info(&mut self) {
+        // log::debug!("Getting source info.");
         let sources = Rc::new(RefCell::new(Vec::new()));
         let sender = self.sender.clone();
 
@@ -208,6 +286,7 @@ impl Pulse {
                     ListResult::Error => {}
                     ListResult::End => {}
                 }
+                log::debug!("The current state of sources is: {:?}", sources);
                 sender
                     .send(Source(sources.clone()))
                     .expect("Unable to send Source Message");
@@ -234,7 +313,8 @@ impl Pulse {
         self.process_message();
     }
 
-    pub fn get_sink_info(&mut self) {
+    fn get_sink_info(&mut self) {
+        println!("In get sink info method");
         let sinks = Rc::new(RefCell::new(Vec::new()));
         let sender = self.sender.clone();
 
@@ -286,29 +366,5 @@ impl Pulse {
 impl Drop for Pulse {
     fn drop(&mut self) {
         self.shutdown();
-    }
-}
-
-// Call backs
-fn print_sink_info(list_result: ListResult<&SinkInfo>, inc: u32) -> Option<(u32, ChannelVolumes)> {
-    log::debug!("Inside print_sink_info");
-    match list_result {
-        ListResult::Item(sink_info) => {
-            let mut channels = sink_info.volume;
-            // log::debug!(
-            // "Name: {}, idx: {}, channels: {}",
-            // sink_info.name.as_ref().unwrap(),
-            // sink_info.index,
-            // channels.len(),
-            // );
-            let one_pct_approx = Volume::from(VolumeDB(-120.0));
-            for _ in 0..inc {
-                channels.increase(one_pct_approx).unwrap();
-            }
-            let vols = channels.get();
-            log::debug!("volume: {} - {}", vols[0], vols[1]);
-            Some((sink_info.index, channels))
-        }
-        ListResult::End | ListResult::Error => None,
     }
 }

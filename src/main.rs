@@ -18,6 +18,12 @@ struct Cli {
 
     #[arg(short, long)]
     decrease: Option<u8>,
+
+    #[arg(long)]
+    print_sources: bool,
+
+    #[arg(long)]
+    print_sinks: bool,
 }
 
 fn main() {
@@ -44,5 +50,13 @@ fn main() {
 
     if let Some(_increment) = cli.decrease {
         log::info!("Todo!")
+    }
+
+    if cli.print_sources {
+        pulse.print_sources();
+    }
+
+    if cli.print_sinks {
+        pulse.print_sinks();
     }
 }
