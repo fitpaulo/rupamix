@@ -452,6 +452,26 @@ impl Pulse {
         self.update_sink_volume(index, volume)
     }
 
+    pub fn toggle_mute(&mut self, name: Option<String>, idx: Option<u32>) {
+        let sink;
+
+        if let Some(idx) = idx {
+            sink = self.get_sink_by_idx(idx);
+        } else if let Some(name) = name {
+            sink = self.get_sink_by_name(name);
+        } else {
+            sink = self.get_default_sink();
+        }
+
+        let sink = sink.unwrap();
+        sink.borrow_mut().toggle_mute();
+
+        let index = sink.borrow().index();
+        let volume = sink.borrow().volume();
+
+        self.update_sink_volume(index, volume)
+    }
+
     pub fn shutdown(&mut self) {
         self.mainloop.borrow_mut().quit(Retval(0));
         self.context.borrow_mut().disconnect();

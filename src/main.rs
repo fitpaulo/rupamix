@@ -41,23 +41,12 @@ fn main() {
     let mut pulse = Pulse::connect_to_pulse().unwrap();
     pulse.sync();
 
-    if cli.verbose >= 2 {
-        simple_logger::init_with_level(log::Level::Debug).unwrap();
-    } else if cli.verbose == 1 {
-        simple_logger::init_with_level(log::Level::Info).unwrap();
-    } else {
-        simple_logger::init_with_level(log::Level::Error).unwrap();
-    }
-
-    if cli.toggle_mute {
-        log::info!("Add code to mute.");
-        log::debug!("Blah")
-    }
-
     if let Some(inc) = cli.increase {
         pulse.increase_sink_volume(inc, cli.name, cli.index);
     } else if let Some(inc) = cli.decrease {
         pulse.decrease_sink_volume(inc, cli.name, cli.index);
+    } else if cli.toggle_mute {
+        pulse.toggle_mute(cli.name, cli.index);
     }
 
     if cli.print_sources {
