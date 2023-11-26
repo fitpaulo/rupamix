@@ -24,10 +24,20 @@ struct Cli {
 
     #[arg(long)]
     print_sinks: bool,
+
+    #[arg(long)]
+    get_volume: bool,
+
+    #[arg(long)]
+    index: Option<u32>,
+
+    #[arg(long)]
+    name: Option<String>,
 }
 
 fn main() {
     let cli = Cli::parse();
+
     let mut pulse = Pulse::connect_to_pulse().unwrap();
     pulse.sync();
 
@@ -44,12 +54,10 @@ fn main() {
         log::debug!("Blah")
     }
 
-    if let Some(_increment) = cli.increase {
-        log::info!("Todo!")
-    }
-
-    if let Some(_increment) = cli.decrease {
-        log::info!("Todo!")
+    if let Some(inc) = cli.increase {
+        pulse.increase_sink_volume(inc, cli.name, cli.index);
+    } else if let Some(inc) = cli.decrease {
+        pulse.decrease_sink_volume(inc, cli.name, cli.index);
     }
 
     if cli.print_sources {
@@ -58,5 +66,9 @@ fn main() {
 
     if cli.print_sinks {
         pulse.print_sinks();
+    }
+
+    if cli.get_volume {
+        pulse.print_sink_volume(None)
     }
 }

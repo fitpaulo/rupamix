@@ -1,25 +1,27 @@
 pub mod server_info_wrapper;
+pub mod sinksource;
 use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
+use crate::pulse_wrapper::sinksource::SinkSource;
 use pulse::callbacks::ListResult;
-use pulse::context::introspect::{Introspector, SinkInfo};
+use pulse::context::introspect::Introspector;
 use pulse::context::{Context, FlagSet as ContextFlagSet, State};
 use pulse::def::Retval;
 use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::Proplist;
-use pulse::volume::{ChannelVolumes, Volume, VolumeDB};
+use pulse::volume::ChannelVolumes;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-#[derive(Debug)]
-struct SinkSource(u32, String);
+type Sink = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
+type Source = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
 
 enum Message {
-    Sink(Rc<RefCell<Vec<SinkSource>>>),
-    Source(Rc<RefCell<Vec<SinkSource>>>),
-    Vol(u32, ChannelVolumes),
+    Sink(SinkSource),
+    Source(SinkSource),
+    Vol(bool),
     ServerInfo(MyServerInfo),
     Empty,
 }
@@ -31,8 +33,8 @@ pub struct Pulse {
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
-    sinks: Option<Rc<RefCell<Vec<SinkSource>>>>,
-    sources: Option<Rc<RefCell<Vec<SinkSource>>>>,
+    sinks: Sink,
+    sources: Source,
 }
 
 impl Pulse {
@@ -94,8 +96,8 @@ impl Pulse {
             introspector,
             sender,
             receiver,
-            sinks: None,
-            sources: None,
+            sinks: Rc::new(RefCell::new(Vec::new())),
+            sources: Rc::new(RefCell::new(Vec::new())),
             server_info: None,
         })
     }
@@ -113,28 +115,33 @@ impl Pulse {
         let mut len_idx = 0;
         let mut len_name = 0;
 
-        for source in self.sources.as_ref().unwrap().borrow().deref() {
-            let len = source.0.to_string().len();
+        for source in self.sources.as_ref().borrow().deref() {
+            let len = source.borrow().index().to_string().len();
             if len > len_idx {
                 len_idx = len;
             }
-            let len = source.1.len();
+            let len = source.borrow().name().len();
             if len > len_name {
                 len_name = len;
             }
         }
 
         len_idx += 10; // len of '(default) '
-        let sum = len_idx + len_name;
+        let sum = len_idx + len_name + 6;
 
+        println!();
         println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
         println!("{:-<sum$}", "");
-        for source in self.sources.as_ref().unwrap().borrow().deref() {
-            if source.1 == self.server_info.as_ref().unwrap().default_source_name {
-                let idx = format!("(default) {}", source.0);
-                println!("{:>len_idx$} -- {:<len_name$}", idx, source.1);
+        for source in self.sources.as_ref().borrow().deref() {
+            if source.borrow().name() == self.server_info.as_ref().unwrap().default_source_name {
+                let idx = format!("(default) {}", source.borrow().index());
+                println!("{:>len_idx$} -- {:<len_name$}", idx, source.borrow().name());
             } else {
-                println!("{:>len_idx$} -- {:<len_name$}", source.0, source.1);
+                println!(
+                    "{:>len_idx$} -- {:<len_name$}",
+                    source.borrow().index(),
+                    source.borrow().name()
+                );
             }
         }
     }
@@ -143,42 +150,76 @@ impl Pulse {
         let mut len_idx = 0;
         let mut len_name = 0;
 
-        for sink in self.sinks.as_ref().unwrap().borrow().deref() {
-            let len = sink.0.to_string().len();
+        for sink in self.sinks.as_ref().borrow().deref() {
+            let len = sink.borrow().index().to_string().len();
             if len > len_idx {
                 len_idx = len;
             }
-            let len = sink.1.len();
+            let len = sink.borrow().name().len();
             if len > len_name {
                 len_name = len;
             }
         }
 
         len_idx += 10; // len of '(default) '
-        let sum = len_idx + len_name;
+        let sum = len_idx + len_name + 6;
 
+        println!();
         println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
         println!("{:-<sum$}", "");
-        for sink in self.sinks.as_ref().unwrap().borrow().deref() {
-            if sink.1 == self.server_info.as_ref().unwrap().default_sink_name {
-                let idx = format!("(default) {}", sink.0);
-                println!("{:>len_idx$} -- {:<len_name$}", idx, sink.1);
+        for sink in self.sinks.as_ref().borrow().deref() {
+            if sink.borrow().name() == self.server_info.as_ref().unwrap().default_sink_name {
+                let idx = format!("(default) {}", sink.borrow().index());
+                println!("{:>len_idx$} -- {:<len_name$}", idx, sink.borrow().name());
             } else {
-                println!("{:>len_idx$} -- {:<len_name$}", sink.0, sink.1);
+                println!(
+                    "{:>len_idx$} -- {:<len_name$}",
+                    sink.borrow().index(),
+                    sink.borrow().name()
+                );
             }
         }
     }
 
-    fn update_server_info(&mut self, info: MyServerInfo) {
-        self.server_info = Some(info);
+    pub fn print_sink_volume(&self, index: Option<u32>) {
+        let sink;
+        if let Some(idx) = index {
+            sink = self.get_sink_by_idx(idx);
+        } else {
+            sink = self.get_default_sink();
+        }
+        if let Some(sink) = sink {
+            sink.borrow().print_volume();
+        } else {
+            println!("There is no sink data, did you sync it?");
+        }
     }
 
-    fn update_sinks(&mut self, sinks: Rc<RefCell<Vec<SinkSource>>>) {
-        self.sinks = Some(sinks);
+    fn get_sink_by_idx(&self, idx: u32) -> Option<Rc<RefCell<SinkSource>>> {
+        for sink in self.sinks.borrow().deref() {
+            if sink.borrow().index() == idx {
+                return Some(sink.clone());
+            }
+        }
+        None
     }
 
-    fn update_sources(&mut self, sources: Rc<RefCell<Vec<SinkSource>>>) {
-        self.sources = Some(sources);
+    fn get_sink_by_name(&self, name: String) -> Option<Rc<RefCell<SinkSource>>> {
+        for sink in self.sinks.borrow().deref() {
+            if sink.borrow().name() == name {
+                return Some(sink.clone());
+            }
+        }
+        None
+    }
+
+    fn get_default_sink(&self) -> Option<Rc<RefCell<SinkSource>>> {
+        for sink in self.sinks.borrow().deref() {
+            if sink.borrow().name() == self.server_info.as_ref().unwrap().default_sink_name {
+                return Some(sink.clone());
+            }
+        }
+        None
     }
 
     fn process_message(&mut self) {
@@ -186,21 +227,20 @@ impl Pulse {
             let message = self.receiver.try_recv().unwrap_or(Message::Empty);
 
             match message {
-                Sink(sink_list) => {
+                Sink(sink) => {
                     // println!("In Sink path");
-                    self.update_sinks(sink_list);
+                    self.update_sinks(sink);
                 }
-                Source(source_list) => {
+                Source(source) => {
                     // println!("In Source path");
-                    self.update_sources(source_list);
+                    self.update_sources(source);
                 }
                 ServerInfo(info) => {
                     // println!("In serve info path");
                     self.update_server_info(info);
                 }
-                Vol(index, volume) => {
+                Vol(_success) => {
                     // println!("In Vol path");
-                    self.update_volume(index, &volume);
                 }
                 Empty => {
                     break;
@@ -209,36 +249,22 @@ impl Pulse {
         }
     }
 
-    fn update_volume(&mut self, index: u32, volume: &ChannelVolumes) {
-        let op = self.introspector.borrow_mut().set_sink_volume_by_index(
-            index,
-            volume,
-            Some(Box::new(|success| {
-                if success {
-                    log::info!("Volume updated successfully.");
-                } else {
-                    log::error!("Failed to update volume!");
-                }
-            })),
-        );
+    fn update_server_info(&mut self, info: MyServerInfo) {
+        self.server_info = Some(info);
+    }
 
-        loop {
-            match self.mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    log::error!("Iterate state was not success, quitting...");
-                    return;
-                }
-                IterateResult::Success(_) => {}
-            }
-            match op.get_state() {
-                pulse::operation::State::Running => (),
-                pulse::operation::State::Cancelled => {
-                    log::error!("Operation cancelled.");
-                    return;
-                }
-                pulse::operation::State::Done => break,
-            }
-        }
+    fn update_sinks(&mut self, sink: SinkSource) {
+        self.sinks
+            .as_ref()
+            .borrow_mut()
+            .push(Rc::new(RefCell::new(sink)));
+    }
+
+    fn update_sources(&mut self, source: SinkSource) {
+        self.sources
+            .as_ref()
+            .borrow_mut()
+            .push(Rc::new(RefCell::new(source)));
     }
 
     fn get_server_info(&mut self) {
@@ -270,26 +296,23 @@ impl Pulse {
 
     fn get_soruce_info(&mut self) {
         // log::debug!("Getting source info.");
-        let sources = Rc::new(RefCell::new(Vec::new()));
         let sender = self.sender.clone();
 
         let op = self
             .introspector
             .borrow()
-            .get_source_info_list(move |result| {
-                match result {
-                    ListResult::Item(info) => {
-                        let name = info.name.as_ref().unwrap().to_string();
-                        let idx = info.index;
-                        sources.borrow_mut().push(SinkSource(idx, name))
-                    }
-                    ListResult::Error => {}
-                    ListResult::End => {}
+            .get_source_info_list(move |result| match result {
+                ListResult::Item(info) => {
+                    let name = info.name.as_ref().unwrap().to_string();
+                    let idx = info.index;
+                    let volume = info.volume;
+                    let mute = info.mute;
+                    sender
+                        .send(Source(SinkSource::new(idx, name, volume, mute)))
+                        .expect("Unable to send sinksource.")
                 }
-                log::debug!("The current state of sources is: {:?}", sources);
-                sender
-                    .send(Source(sources.clone()))
-                    .expect("Unable to send Source Message");
+                ListResult::Error => {}
+                ListResult::End => {}
             });
 
         loop {
@@ -314,26 +337,24 @@ impl Pulse {
     }
 
     fn get_sink_info(&mut self) {
-        println!("In get sink info method");
-        let sinks = Rc::new(RefCell::new(Vec::new()));
+        // println!("In get sink info method");
         let sender = self.sender.clone();
 
         let op = self
             .introspector
             .borrow()
-            .get_sink_info_list(move |result| {
-                match result {
-                    ListResult::Item(info) => {
-                        let name = info.name.as_ref().unwrap().to_string();
-                        let idx = info.index;
-                        sinks.borrow_mut().push(SinkSource(idx, name))
-                    }
-                    ListResult::Error => {}
-                    ListResult::End => {}
+            .get_sink_info_list(move |result| match result {
+                ListResult::Item(info) => {
+                    let name = info.name.as_ref().unwrap().to_string();
+                    let idx = info.index;
+                    let volume = info.volume;
+                    let mute = info.mute;
+                    sender
+                        .send(Sink(SinkSource::new(idx, name, volume, mute)))
+                        .expect("Unable to send sinksource.")
                 }
-                sender
-                    .send(Sink(sinks.clone()))
-                    .expect("Unable to send Sink Message.");
+                ListResult::Error => {}
+                ListResult::End => {}
             });
 
         loop {
@@ -355,6 +376,80 @@ impl Pulse {
             }
         }
         self.process_message();
+    }
+
+    pub fn increase_sink_volume(&mut self, inc: u8, name: Option<String>, idx: Option<u32>) {
+        let sink;
+
+        if let Some(idx) = idx {
+            sink = self.get_sink_by_idx(idx);
+        } else if let Some(name) = name {
+            sink = self.get_sink_by_name(name);
+        } else {
+            sink = self.get_default_sink();
+        }
+
+        let sink = sink.unwrap();
+        sink.borrow_mut().increase_volume(inc);
+
+        let index = sink.borrow().index();
+        let volume = sink.borrow().volume();
+
+        self.update_sink_volume(index, volume)
+    }
+
+    fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
+        let sender = self.sender.clone();
+
+        let op = self.introspector.borrow_mut().set_sink_volume_by_index(
+            index,
+            &volume,
+            Some(Box::new(move |success| {
+                (sender
+                    .send(Vol(success))
+                    .expect("Unable to send success bool"));
+            })),
+        );
+
+        loop {
+            // This top loop must be there, it must get some upate that makes the second match statement work
+            match self.mainloop.borrow_mut().iterate(false) {
+                IterateResult::Quit(_) | IterateResult::Err(_) => {
+                    log::error!("Iterate state was not success, quitting...");
+                    return;
+                }
+                IterateResult::Success(_) => {}
+            }
+            match op.get_state() {
+                pulse::operation::State::Running => (),
+                pulse::operation::State::Cancelled => {
+                    log::error!("Operation cancelled.");
+                    return;
+                }
+                pulse::operation::State::Done => break,
+            }
+        }
+        self.process_message();
+    }
+
+    pub fn decrease_sink_volume(&mut self, inc: u8, name: Option<String>, idx: Option<u32>) {
+        let sink;
+
+        if let Some(idx) = idx {
+            sink = self.get_sink_by_idx(idx);
+        } else if let Some(name) = name {
+            sink = self.get_sink_by_name(name);
+        } else {
+            sink = self.get_default_sink();
+        }
+
+        let sink = sink.unwrap();
+        sink.borrow_mut().decrease_volume(inc);
+
+        let index = sink.borrow().index();
+        let volume = sink.borrow().volume();
+
+        self.update_sink_volume(index, volume)
     }
 
     pub fn shutdown(&mut self) {
