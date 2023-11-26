@@ -15,8 +15,8 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-type Sink = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
-type Source = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
+type Sinks = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
+type Sources = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
 
 enum Message {
     Sink(SinkSource),
@@ -33,8 +33,8 @@ pub struct Pulse {
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
-    sinks: Sink,
-    sources: Source,
+    sinks: Sinks,
+    sources: Sources,
 }
 
 impl Pulse {
@@ -464,7 +464,9 @@ impl Pulse {
         }
 
         let sink = sink.unwrap();
-        sink.borrow_mut().toggle_mute();
+        sink.borrow_mut()
+            .toggle_mute()
+            .expect("Unable to toggle mute");
 
         let index = sink.borrow().index();
         let volume = sink.borrow().volume();
