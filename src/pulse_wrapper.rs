@@ -170,10 +170,12 @@ impl Pulse {
         }
     }
 
-    pub fn print_sink_volume(&self, index: Option<u32>) {
+    pub fn print_sink_volume(&self, idx: &Option<u32>, name: &Option<String>) {
         let sink;
-        if let Some(idx) = index {
-            sink = self.get_sink_by_idx(idx);
+        if let Some(idx) = idx {
+            sink = self.get_sink_by_idx(*idx);
+        } else if let Some(name) = name {
+            sink = self.get_sink_by_name(name);
         } else {
             sink = self.get_default_sink();
         }
@@ -193,7 +195,7 @@ impl Pulse {
         None
     }
 
-    fn get_sink_by_name(&self, name: String) -> Option<Rc<RefCell<SinkSource>>> {
+    fn get_sink_by_name(&self, name: &String) -> Option<Rc<RefCell<SinkSource>>> {
         for sink in self.sinks.borrow().deref() {
             if sink.borrow().name() == name {
                 return Some(sink.clone());
@@ -360,10 +362,10 @@ impl Pulse {
         self.process_message();
     }
 
-    pub fn increase_sink_volume(&mut self, inc: u8, name: Option<String>, idx: Option<u32>) {
+    pub fn increase_sink_volume(&mut self, inc: &u8, name: &Option<String>, idx: &Option<u32>) {
         let sink;
 
-        if let Some(idx) = idx {
+        if let Some(idx) = *idx {
             sink = self.get_sink_by_idx(idx);
         } else if let Some(name) = name {
             sink = self.get_sink_by_name(name);
@@ -412,10 +414,10 @@ impl Pulse {
         self.process_message();
     }
 
-    pub fn decrease_sink_volume(&mut self, inc: u8, name: Option<String>, idx: Option<u32>) {
+    pub fn decrease_sink_volume(&mut self, inc: &u8, name: &Option<String>, idx: &Option<u32>) {
         let sink;
 
-        if let Some(idx) = idx {
+        if let Some(idx) = *idx {
             sink = self.get_sink_by_idx(idx);
         } else if let Some(name) = name {
             sink = self.get_sink_by_name(name);
@@ -432,10 +434,10 @@ impl Pulse {
         self.update_sink_volume(index, volume)
     }
 
-    pub fn toggle_mute(&mut self, name: Option<String>, idx: Option<u32>) {
+    pub fn toggle_mute(&mut self, name: &Option<String>, idx: &Option<u32>) {
         let sink;
 
-        if let Some(idx) = idx {
+        if let Some(idx) = *idx {
             sink = self.get_sink_by_idx(idx);
         } else if let Some(name) = name {
             sink = self.get_sink_by_name(name);

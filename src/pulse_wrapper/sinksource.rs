@@ -40,7 +40,7 @@ impl SinkSource {
         self.volume
     }
 
-    pub fn increase_volume(&mut self, inc: u8) {
+    pub fn increase_volume(&mut self, inc: &u8) {
         let initial = self.get_volume_as_pct();
         let mut current = initial;
 
@@ -56,7 +56,7 @@ impl SinkSource {
         }
     }
 
-    pub fn decrease_volume(&mut self, inc: u8) {
+    pub fn decrease_volume(&mut self, inc: &u8) {
         let initial = self.get_volume_as_pct();
         let mut current = initial;
 
@@ -74,9 +74,8 @@ impl SinkSource {
 
     pub fn print_volume(&self) {
         let vols = self.volume.get();
-        for vol in vols {
-            println!("{}", vol.print());
-        }
+        println!();
+        println!("The current volume is: {}", vols[0].print());
     }
 
     fn get_volume_as_pct(&self) -> u8 {

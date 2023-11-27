@@ -1,7 +1,7 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use rupamix::pulse_wrapper::Pulse;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(name = "Rust Pulse Mixer")]
 #[command(author = "Paulo Guimaraes <paulotechusa@proton.me>")]
 #[command(version = option_env!("CARGO_PKG_VERSION"))]
@@ -10,29 +10,88 @@ struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
 
-    #[arg(short, long)]
-    toggle_mute: bool,
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    #[arg(short, long)]
-    increase: Option<u8>,
+#[derive(Debug, Subcommand)]
+enum Commands {
+    #[command(visible_aliases = ["inc", "i"])]
+    IncreaseVolume {
+        #[arg(short, long, display_order = 0)]
+        #[arg(default_value = "5")]
+        #[arg(long = "increment")]
+        #[arg(help = "The value to increase the volume by, if not specified it uses the default.")]
+        inc: u8,
 
-    #[arg(short, long)]
-    decrease: Option<u8>,
+        #[arg(long = "index")]
+        #[arg(visible_alias = "idx")]
+        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "name")]
+        idx: Option<u32>,
 
-    #[arg(long)]
-    print_sources: bool,
+        #[arg(short, long)]
+        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "idx")]
+        name: Option<String>,
+    },
 
-    #[arg(long)]
-    print_sinks: bool,
+    #[command(visible_aliases = ["dec", "d"])]
+    DecreaseVolume {
+        #[arg(short, long, display_order = 0)]
+        #[arg(default_value = "5")]
+        #[arg(long = "increment")]
+        #[arg(help = "The value to increase the volume by, if not specified it uses the default.")]
+        inc: u8,
 
-    #[arg(long)]
-    get_volume: bool,
+        #[arg(long = "index")]
+        #[arg(visible_alias = "idx")]
+        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "name")]
+        idx: Option<u32>,
 
-    #[arg(long)]
-    index: Option<u32>,
+        #[arg(short, long)]
+        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "idx")]
+        name: Option<String>,
+    },
 
-    #[arg(long)]
-    name: Option<String>,
+    #[command(visible_alias = "t")]
+    ToggleMute {
+        #[arg(long = "index")]
+        #[arg(visible_alias = "idx")]
+        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "name")]
+        idx: Option<u32>,
+
+        #[arg(short, long)]
+        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "idx")]
+        name: Option<String>,
+    },
+
+    #[command(visible_alias = "p")]
+    Print {
+        #[arg(long = "index")]
+        #[arg(visible_alias = "idx")]
+        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "name")]
+        idx: Option<u32>,
+
+        #[arg(short, long)]
+        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
+        #[arg(conflicts_with = "idx")]
+        name: Option<String>,
+
+        #[arg(short, long)]
+        sinks: bool,
+
+        #[arg(long)]
+        sources: bool,
+
+        #[arg(short, long)]
+        volume: bool,
+    },
 }
 
 fn main() {
@@ -41,23 +100,32 @@ fn main() {
     let mut pulse = Pulse::connect_to_pulse().unwrap();
     pulse.sync();
 
-    if let Some(inc) = cli.increase {
-        pulse.increase_sink_volume(inc, cli.name, cli.index);
-    } else if let Some(inc) = cli.decrease {
-        pulse.decrease_sink_volume(inc, cli.name, cli.index);
-    } else if cli.toggle_mute {
-        pulse.toggle_mute(cli.name, cli.index);
-    }
+    match &cli.command {
+        Commands::Print {
+            sinks,
+            sources,
+            volume,
+            idx,
+            name,
+        } => {
+            if *sources {
+                pulse.print_sources();
+            }
 
-    if cli.print_sources {
-        pulse.print_sources();
-    }
+            if *sinks {
+                pulse.print_sinks();
+            }
 
-    if cli.print_sinks {
-        pulse.print_sinks();
-    }
-
-    if cli.get_volume {
-        pulse.print_sink_volume(None)
+            if *volume {
+                pulse.print_sink_volume(idx, name)
+            }
+        }
+        Commands::IncreaseVolume { inc, idx, name } => {
+            pulse.increase_sink_volume(inc, name, idx);
+        }
+        Commands::DecreaseVolume { inc, idx, name } => {
+            pulse.decrease_sink_volume(inc, name, idx);
+        }
+        Commands::ToggleMute { idx, name } => pulse.toggle_mute(name, idx),
     }
 }
