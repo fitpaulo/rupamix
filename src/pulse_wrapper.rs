@@ -15,8 +15,8 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-type Sink = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
-type Source = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
+type Sinks = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
+type Sources = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
 
 enum Message {
     Sink(SinkSource),
@@ -33,45 +33,38 @@ pub struct Pulse {
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
-    sinks: Sink,
-    sources: Source,
+    sinks: Sinks,
+    sources: Sources,
 }
 
 impl Pulse {
     pub fn connect_to_pulse() -> Option<Pulse> {
-        log::debug!("In fn connect to pulse.");
-
         let (sender, receiver) = mpsc::channel();
 
         let mainloop = Rc::new(RefCell::new(
             Mainloop::new().expect("Failed to create main loop."),
         ));
-        log::debug!("Mainloop created.");
 
         let mut proplist = Proplist::new().unwrap();
         proplist
             .set_str(pulse::proplist::properties::APPLICATION_NAME, "RuPaMixa")
             .unwrap();
 
-        log::debug!("Attempting to create the context.");
         let context = Rc::new(RefCell::new(
             Context::new_with_proplist(mainloop.borrow().deref(), "RuPaMixaContext", &proplist)
                 .expect("Failed to create new context."),
         ));
-        log::debug!("Context created.");
 
-        log::debug!("Connecting to context.");
         context
             .borrow_mut()
             .connect(None, ContextFlagSet::NOFLAGS, None)
             .expect("Failed to connect to context");
-        log::debug!("Connected to context.");
 
         // wait for context to be ready
         loop {
             match mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    log::error!("Iterate state was not success, quitting...");
+                    eprintln!("Iterate state was not success, quitting...");
                     return None;
                 }
                 IterateResult::Success(_) => {}
@@ -81,7 +74,6 @@ impl Pulse {
                     break;
                 }
                 State::Failed | State::Terminated => {
-                    log::error!("Context state failed/terminated, quitting...");
                     return None;
                 }
                 _ => {}
@@ -103,11 +95,8 @@ impl Pulse {
     }
 
     pub fn sync(&mut self) {
-        log::debug!("Syncing server info");
         self.get_server_info();
-        log::debug!("Syncing source info");
         self.get_soruce_info();
-        log::debug!("Syncing sink info");
         self.get_sink_info();
     }
 
@@ -277,7 +266,6 @@ impl Pulse {
             // This top match must be there, it must get some upate that makes the second match statement work
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    log::error!("Iterate state was not success, quitting...");
                     return;
                 }
                 IterateResult::Success(_) => (),
@@ -285,7 +273,6 @@ impl Pulse {
             match op.get_state() {
                 pulse::operation::State::Running => (),
                 pulse::operation::State::Cancelled => {
-                    log::error!("Operation cancelled.");
                     return;
                 }
                 pulse::operation::State::Done => break,
@@ -295,7 +282,6 @@ impl Pulse {
     }
 
     fn get_soruce_info(&mut self) {
-        // log::debug!("Getting source info.");
         let sender = self.sender.clone();
 
         let op = self
@@ -319,7 +305,6 @@ impl Pulse {
             // This top loop must be there, it must get some upate that makes the second match statement work
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    log::error!("Iterate state was not success, quitting...");
                     return;
                 }
                 IterateResult::Success(_) => {}
@@ -327,7 +312,6 @@ impl Pulse {
             match op.get_state() {
                 pulse::operation::State::Running => (),
                 pulse::operation::State::Cancelled => {
-                    log::error!("Operation cancelled.");
                     return;
                 }
                 pulse::operation::State::Done => break,
@@ -361,7 +345,6 @@ impl Pulse {
             // This top loop must be there, it must get some upate that makes the second match statement work
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    log::error!("Iterate state was not success, quitting...");
                     return;
                 }
                 IterateResult::Success(_) => {}
@@ -369,7 +352,6 @@ impl Pulse {
             match op.get_state() {
                 pulse::operation::State::Running => (),
                 pulse::operation::State::Cancelled => {
-                    log::error!("Operation cancelled.");
                     return;
                 }
                 pulse::operation::State::Done => break,
@@ -415,7 +397,6 @@ impl Pulse {
             // This top loop must be there, it must get some upate that makes the second match statement work
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    log::error!("Iterate state was not success, quitting...");
                     return;
                 }
                 IterateResult::Success(_) => {}
@@ -423,7 +404,6 @@ impl Pulse {
             match op.get_state() {
                 pulse::operation::State::Running => (),
                 pulse::operation::State::Cancelled => {
-                    log::error!("Operation cancelled.");
                     return;
                 }
                 pulse::operation::State::Done => break,
@@ -464,7 +444,9 @@ impl Pulse {
         }
 
         let sink = sink.unwrap();
-        sink.borrow_mut().toggle_mute();
+        sink.borrow_mut()
+            .toggle_mute()
+            .expect("Unable to toggle mute");
 
         let index = sink.borrow().index();
         let volume = sink.borrow().volume();
