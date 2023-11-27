@@ -1,7 +1,7 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use rupamix::pulse_wrapper::Pulse;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(name = "Rust Pulse Mixer")]
 #[command(author = "Paulo Guimaraes <paulotechusa@proton.me>")]
 #[command(version = option_env!("CARGO_PKG_VERSION"))]
@@ -12,12 +12,6 @@ struct Cli {
 
     #[arg(short, long)]
     toggle_mute: bool,
-
-    #[arg(short, long)]
-    increase: Option<u8>,
-
-    #[arg(short, long)]
-    decrease: Option<u8>,
 
     #[arg(long)]
     print_sources: bool,
@@ -33,6 +27,32 @@ struct Cli {
 
     #[arg(long)]
     name: Option<String>,
+
+    #[arg(long)]
+    increase: Option<u8>,
+
+    #[arg(short, long)]
+    decrease: Option<u8>,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    #[command(arg_required_else_help = true)]
+    #[command(visible_aliases = ["inc", "i"])]
+    Increase {
+        #[arg(short, long, value_name = "INDEX")]
+        index: Option<u8>,
+
+        #[arg(long)]
+        name: Option<String>,
+    },
+    Print {
+        #[arg(short, long)]
+        sinks: bool,
+    },
 }
 
 fn main() {
