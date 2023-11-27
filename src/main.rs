@@ -84,12 +84,15 @@ enum Commands {
         name: Option<String>,
 
         #[arg(short, long)]
+        #[arg(help = "Prints the index and name of all the sinks.")]
         sinks: bool,
 
         #[arg(long)]
+        #[arg(help = "Prints the index and name of all the sources.")]
         sources: bool,
 
         #[arg(short, long)]
+        #[arg(help = "Prints the volume of the specifed sink or the default if not specified.")]
         volume: bool,
     },
 }
