@@ -29,16 +29,20 @@ struct Cli {
 enum Commands {
     #[command(visible_aliases = ["inc", "i"])]
     IncreaseVolume {
-        #[arg(short, long)]
+        #[arg(short)]
         #[arg(default_value = "5")]
         #[arg(long = "increment")]
         #[arg(help = "The value to increase the volume by; uses default if not specified")]
         inc: u8,
+
+        #[arg(short, long)]
+        #[arg(help = "Allow volume to go past 100; hard capped at 120 currently")]
+        boost: bool,
     },
 
     #[command(visible_aliases = ["dec", "d"])]
     DecreaseVolume {
-        #[arg(short, long)]
+        #[arg(short)]
         #[arg(default_value = "5")]
         #[arg(long = "increment")]
         #[arg(help = "The value to increase the volume by, if not specified it uses the default")]
@@ -89,8 +93,8 @@ fn main() {
                 pulse.print_sink_volume(cli.idx, cli.name)
             }
         }
-        Commands::IncreaseVolume { inc } => {
-            pulse.increase_sink_volume(inc, cli.name, cli.idx);
+        Commands::IncreaseVolume { inc, boost } => {
+            pulse.increase_sink_volume(inc, cli.name, cli.idx, *boost);
         }
         Commands::DecreaseVolume { inc } => {
             pulse.decrease_sink_volume(inc, cli.name, cli.idx);

@@ -362,7 +362,13 @@ impl Pulse {
         self.process_message();
     }
 
-    pub fn increase_sink_volume(&mut self, inc: &u8, name: Option<String>, idx: Option<u32>) {
+    pub fn increase_sink_volume(
+        &mut self,
+        inc: &u8,
+        name: Option<String>,
+        idx: Option<u32>,
+        boost: bool,
+    ) {
         let sink;
 
         if let Some(idx) = idx {
@@ -374,7 +380,7 @@ impl Pulse {
         }
 
         let sink = sink.unwrap();
-        sink.borrow_mut().increase_volume(inc);
+        sink.borrow_mut().increase_volume(inc, boost);
 
         let index = sink.borrow().index();
         let volume = sink.borrow().volume();

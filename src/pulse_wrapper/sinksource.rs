@@ -4,6 +4,8 @@ use std::{
     io::{Error, ErrorKind, Read, Write},
 };
 
+static MAX_VOLUME: u8 = 120;
+
 static FILE: &str = "/tmp/rupamix_vol";
 static APPROX_ONE_PCT: VolumeDB = VolumeDB(-120.0);
 
@@ -40,14 +42,16 @@ impl SinkSource {
         self.volume
     }
 
-    pub fn increase_volume(&mut self, inc: &u8) {
+    pub fn increase_volume(&mut self, inc: &u8, boost: bool) {
         let initial = self.get_volume_as_pct();
         let mut current = initial;
 
         while current < initial + inc {
-            if current >= 100 {
-                println!("Volume is at 100 or above: ({})", current);
-                println!("Can't increase any more.");
+            if current >= MAX_VOLUME {
+                println!("Volume at max: {}", MAX_VOLUME);
+                break;
+            } else if current >= 100 && !boost {
+                println!("Volume is at {} use --boost flag to go higher", current);
                 break;
             } else {
                 self.volume.increase(Volume::from(APPROX_ONE_PCT));
