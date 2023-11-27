@@ -10,6 +10,17 @@ struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
 
+    #[arg(short, long = "index")]
+    #[arg(visible_alias = "idx")]
+    #[arg(help = "The index of the sink; uses default sink if not specified")]
+    #[arg(conflicts_with = "name")]
+    idx: Option<u32>,
+
+    #[arg(short, long)]
+    #[arg(help = "The name of the sink; uses default sink if not specified")]
+    #[arg(conflicts_with = "idx")]
+    name: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -18,81 +29,38 @@ struct Cli {
 enum Commands {
     #[command(visible_aliases = ["inc", "i"])]
     IncreaseVolume {
-        #[arg(short, long, display_order = 0)]
+        #[arg(short, long)]
         #[arg(default_value = "5")]
         #[arg(long = "increment")]
-        #[arg(help = "The value to increase the volume by, if not specified it uses the default.")]
+        #[arg(help = "The value to increase the volume by; uses default if not specified")]
         inc: u8,
-
-        #[arg(long = "index")]
-        #[arg(visible_alias = "idx")]
-        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "name")]
-        idx: Option<u32>,
-
-        #[arg(short, long)]
-        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "idx")]
-        name: Option<String>,
     },
 
     #[command(visible_aliases = ["dec", "d"])]
     DecreaseVolume {
-        #[arg(short, long, display_order = 0)]
+        #[arg(short, long)]
         #[arg(default_value = "5")]
         #[arg(long = "increment")]
-        #[arg(help = "The value to increase the volume by, if not specified it uses the default.")]
+        #[arg(help = "The value to increase the volume by, if not specified it uses the default")]
         inc: u8,
-
-        #[arg(long = "index")]
-        #[arg(visible_alias = "idx")]
-        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "name")]
-        idx: Option<u32>,
-
-        #[arg(short, long)]
-        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "idx")]
-        name: Option<String>,
     },
 
     #[command(visible_alias = "t")]
-    ToggleMute {
-        #[arg(long = "index")]
-        #[arg(visible_alias = "idx")]
-        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "name")]
-        idx: Option<u32>,
-
-        #[arg(short, long)]
-        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "idx")]
-        name: Option<String>,
-    },
+    ToggleMute,
 
     #[command(visible_alias = "p")]
+    #[command(about = "Prints various data you may be interested in")]
     Print {
-        #[arg(long = "index")]
-        #[arg(visible_alias = "idx")]
-        #[arg(help = "The index of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "name")]
-        idx: Option<u32>,
-
         #[arg(short, long)]
-        #[arg(help = "The name of the Sink. Uses default sink if not specified.")]
-        #[arg(conflicts_with = "idx")]
-        name: Option<String>,
-
-        #[arg(short, long)]
-        #[arg(help = "Prints the index and name of all the sinks.")]
+        #[arg(help = "Prints the index and name of all the sinks")]
         sinks: bool,
 
         #[arg(long)]
-        #[arg(help = "Prints the index and name of all the sources.")]
+        #[arg(help = "Prints the index and name of all the sources")]
         sources: bool,
 
         #[arg(short, long)]
-        #[arg(help = "Prints the volume of the specifed sink or the default if not specified.")]
+        #[arg(help = "Prints the volume of the specifed sink or the default if not specified")]
         volume: bool,
     },
 }
@@ -108,8 +76,6 @@ fn main() {
             sinks,
             sources,
             volume,
-            idx,
-            name,
         } => {
             if *sources {
                 pulse.print_sources();
@@ -120,15 +86,15 @@ fn main() {
             }
 
             if *volume {
-                pulse.print_sink_volume(idx, name)
+                pulse.print_sink_volume(cli.idx, cli.name)
             }
         }
-        Commands::IncreaseVolume { inc, idx, name } => {
-            pulse.increase_sink_volume(inc, name, idx);
+        Commands::IncreaseVolume { inc } => {
+            pulse.increase_sink_volume(inc, cli.name, cli.idx);
         }
-        Commands::DecreaseVolume { inc, idx, name } => {
-            pulse.decrease_sink_volume(inc, name, idx);
+        Commands::DecreaseVolume { inc } => {
+            pulse.decrease_sink_volume(inc, cli.name, cli.idx);
         }
-        Commands::ToggleMute { idx, name } => pulse.toggle_mute(name, idx),
+        Commands::ToggleMute => pulse.toggle_mute(cli.name, cli.idx),
     }
 }
