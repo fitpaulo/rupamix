@@ -76,7 +76,8 @@ impl SinkSource {
         println!("The current volume is: {}", vols[0].print());
     }
 
-    fn get_volume_as_pct(&self) -> u8 {
+    // Made this pub for testing pulse_wrapper
+    pub fn get_volume_as_pct(&self) -> u8 {
         let vol_str = self.volume.get()[0].print();
         for part in vol_str.split('%') {
             if let Ok(num) = part.trim().parse::<u8>() {
