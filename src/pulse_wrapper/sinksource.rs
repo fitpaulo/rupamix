@@ -1,4 +1,3 @@
-// This is done for moking purposes
 use pulse::volume::{ChannelVolumes, Volume, VolumeDB};
 use std::fs;
 use std::io::{Error, ErrorKind, Read, Write};
