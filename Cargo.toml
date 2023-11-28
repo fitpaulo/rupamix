@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Paulo Guimaraes"]
 description = "Rust PA Mixer is a cli tool for interfacing with Pulse Audio"
-license = "GPL-2.0-or-later"
 license-file = "LICENSE"
 repository = "https://github.com/fitpaulo/rupamix"
 keywords = ["pulse", "audio", "pulseaudio", "cli", "mixer"]
