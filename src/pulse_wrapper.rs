@@ -96,7 +96,7 @@ impl Pulse {
 
     pub fn sync(&mut self) {
         self.get_server_info();
-        self.get_soruce_info();
+        self.get_source_info();
         self.get_sink_info();
     }
 
@@ -283,7 +283,7 @@ impl Pulse {
         self.process_message();
     }
 
-    fn get_soruce_info(&mut self) {
+    fn get_source_info(&mut self) {
         let sender = self.sender.clone();
 
         let op = self
@@ -471,5 +471,129 @@ impl Pulse {
 impl Drop for Pulse {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup() -> Pulse {
+        Pulse::connect_to_pulse().unwrap()
+    }
+
+    #[test]
+    fn checks_update_sereve_gets_server_info() {
+        let mut pulse = setup();
+
+        pulse.get_server_info();
+        assert!(pulse.server_info.is_some());
+    }
+
+    #[test]
+    fn checks_get_sinks_builds_a_vec() {
+        let mut pulse = setup();
+        pulse.get_sink_info();
+
+        pulse.get_sink_info();
+
+        assert!(pulse.sinks.borrow().len() > 0);
+    }
+
+    #[test]
+    fn checks_get_sources_builds_a_vec() {
+        let mut pulse = setup();
+        pulse.get_source_info();
+
+        pulse.get_source_info();
+
+        assert!(pulse.sources.borrow().len() > 0);
+    }
+
+    #[test]
+    fn verify_get_default_sink_returns_a_sink() {
+        let mut pulse = setup();
+        pulse.sync();
+
+        let default = pulse.get_default_sink();
+
+        assert!(default.is_some())
+    }
+
+    // everything below here must be run on a single thread
+    // run with the following flags
+    // --ignored --test-threads=1
+    //  _ _ _ _ _ _ _ _ _ _
+    // _ _ _ _ _ _ _ _ _ _
+
+    #[test]
+    #[ignore]
+    // This requires voluse to be 95 or less, otherwise it will fail
+    fn checks_increase_vol_increases_vol() {
+        let mut pulse = setup();
+        pulse.sync();
+
+        let default = pulse.get_default_sink().unwrap();
+
+        let initial = default.borrow().get_volume_as_pct();
+
+        pulse.increase_sink_volume(&5, None, None, false);
+
+        // Reget from the system
+        let mut pulse = setup();
+        pulse.sync();
+        let default = pulse.get_default_sink().unwrap();
+
+        assert_eq!(initial + 5, default.borrow().get_volume_as_pct());
+    }
+
+    #[test]
+    #[ignore]
+    // This requires voluse to be 5 or greater, otherwise it will fail
+    fn checks_decrease_vol_decreases_vol() {
+        let mut pulse = setup();
+        pulse.sync();
+
+        let default = pulse.get_default_sink().unwrap();
+
+        let initial = default.borrow().get_volume_as_pct();
+
+        pulse.decrease_sink_volume(&5, None, None);
+
+        // Reget from the system
+        let mut pulse = setup();
+        pulse.sync();
+        let default = pulse.get_default_sink().unwrap();
+
+        assert_eq!(initial - 5, default.borrow().get_volume_as_pct());
+    }
+
+    #[test]
+    #[ignore]
+    fn checks_toggle_mute_works() {
+        let mut pulse = setup();
+        pulse.sync();
+
+        let default = pulse.get_default_sink().unwrap();
+
+        let initial = default.borrow().get_volume_as_pct();
+
+        pulse.toggle_mute(None, None);
+
+        // Reget from the system
+        let mut pulse = setup();
+        pulse.sync();
+        let default = pulse.get_default_sink().unwrap();
+        let muted = default.borrow().get_volume_as_pct();
+
+        assert_eq!(muted, 0);
+
+        pulse.toggle_mute(None, None);
+
+        let mut pulse = setup();
+        pulse.sync();
+        let default = pulse.get_default_sink().unwrap();
+
+        assert_eq!(initial, default.borrow().get_volume_as_pct());
     }
 }
