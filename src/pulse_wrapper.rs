@@ -265,7 +265,7 @@ impl Pulse {
             sender.send(ServerInfo(server_info)).unwrap();
         });
         loop {
-            // This top match must be there, it must get some upate that makes the second match statement work
+            // This match must be there
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
                     return;
@@ -304,7 +304,7 @@ impl Pulse {
             });
 
         loop {
-            // This top loop must be there, it must get some upate that makes the second match statement work
+            // This match must be there
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
                     return;
@@ -344,7 +344,7 @@ impl Pulse {
             });
 
         loop {
-            // This top loop must be there, it must get some upate that makes the second match statement work
+            // This match must be there
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
                     return;
@@ -402,7 +402,6 @@ impl Pulse {
         );
 
         loop {
-            // This top loop must be there, it must get some upate that makes the second match statement work
             match self.mainloop.borrow_mut().iterate(false) {
                 IterateResult::Quit(_) | IterateResult::Err(_) => {
                     return;
@@ -528,7 +527,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    // This requires voluse to be 95 or less, otherwise it will fail
+    // This requires volume to be 95 or less, otherwise it will fail
     fn checks_increase_vol_increases_vol() {
         let mut pulse = setup();
         pulse.sync();
@@ -539,7 +538,7 @@ mod tests {
 
         pulse.increase_sink_volume(&5, None, None, false);
 
-        // Reget from the system
+        // Re-get from the system
         let mut pulse = setup();
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
@@ -549,7 +548,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    // This requires voluse to be 5 or greater, otherwise it will fail
+    // This requires volume to be 5 or greater, otherwise it will fail
     fn checks_decrease_vol_decreases_vol() {
         let mut pulse = setup();
         pulse.sync();
@@ -560,7 +559,7 @@ mod tests {
 
         pulse.decrease_sink_volume(&5, None, None);
 
-        // Reget from the system
+        // Reg-et from the system
         let mut pulse = setup();
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
@@ -580,7 +579,7 @@ mod tests {
 
         pulse.toggle_mute(None, None);
 
-        // Reget from the system
+        // Re-get from the system
         let mut pulse = setup();
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
