@@ -4,22 +4,47 @@ This started a project to test my Rust chops after going through the rust book. 
 to drive the interadtion with the Pulse server. It currently offers enough features to bind to keypresses
 for increasing, decreasing, and muting the default sink (speakers).
 
+## Install
+### Use Cargo
+
+    cargo install rupamix
+
+### Download the repo
+
+    git clone git@github.com:fitpaulo/rupamix.git \
+    && cd rupamix \
+    && cargo build
+    
+### Make it visible to your WM/Desktop
+To use it with your window manger, i.e. bind it to a keyboard press, your window manager needs to see the binary.
+The easiest way is to copy the execsuteale into /usr/bin
+
+    sudo cp /path/to/executeable /usr/bin/.
+
+Or you can link it:
+
+    sudo ln -sf /path/to/executable /usr/bin/.
 ## Example Usage For Defualt Sink
 To increase the audio by the defualt 5:
-    `rupamix i`
+    
+    rupamix i
     
 To increase the audio by N:
-    `rupamix i --increment N`
+    
+    rupamix i --increment N
 
 To decrease the audio py the defualt 5:
-    `rupamix d`
+    
+    rupamix d
     
 To decrease the audio by N:
-    `rupamix d --increment N`
+    
+    rupamix d --increment N
 
 ## You can specify the sink as well
 To get the list of sink indexes and names:
-    `rupamix p -v`
+    
+    rupamix p -v
 
             Index -- Name                                             
     --------------------------------------------------------------------
@@ -29,14 +54,15 @@ To get the list of sink indexes and names:
 
 Then update a sink like the following:
 
-`rupamix -i 146 i --increment 10`
+    rupamix -i 146 i --increment 10
 
 OR
 
-`rupamix -n alsa_output.pci-0000_0b_00.4.iec958-stereo i -i 10`
+    rupamix -n alsa_output.pci-0000_0b_00.4.iec958-stereo i -i 10
 
 ## Toggle Mute
 It can toggle mute as well: 
-    `rupamix t`
+    
+    rupamix t
 
 
