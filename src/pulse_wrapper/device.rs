@@ -122,7 +122,6 @@ mod tests {
             index: 150,
             name: String::from("Dummy"),
             volume,
-            mute: false,
         }
     }
 
