@@ -7,6 +7,7 @@ use pulse::context::introspect::Introspector;
 use pulse::context::{Context, FlagSet as ContextFlagSet, State};
 use pulse::def::Retval;
 use pulse::mainloop::standard::{IterateResult, Mainloop};
+use pulse::operation::Operation;
 use pulse::proplist::Proplist;
 use pulse::volume::ChannelVolumes;
 use std::cell::RefCell;
@@ -261,12 +262,7 @@ impl Pulse {
             .push(Rc::new(RefCell::new(source)));
     }
 
-    fn get_server_info(&mut self) {
-        let sender = self.sender.clone();
-        let op = self.introspector.borrow().get_server_info(move |info| {
-            let server_info = MyServerInfo::new(info);
-            sender.send(ServerInfo(server_info)).unwrap();
-        });
+    fn wait_for_op<T: ?Sized>(&mut self, op: Operation<T>) {
         loop {
             // This match must be there
             match self.mainloop.borrow_mut().iterate(false) {
@@ -283,6 +279,15 @@ impl Pulse {
                 pulse::operation::State::Done => break,
             }
         }
+    }
+
+    fn get_server_info(&mut self) {
+        let sender = self.sender.clone();
+        let op = self.introspector.borrow().get_server_info(move |info| {
+            let server_info = MyServerInfo::new(info);
+            sender.send(ServerInfo(server_info)).unwrap();
+        });
+        self.wait_for_op(op);
         self.process_message();
     }
 
@@ -305,22 +310,7 @@ impl Pulse {
                 ListResult::End => {}
             });
 
-        loop {
-            // This match must be there
-            match self.mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    return;
-                }
-                IterateResult::Success(_) => {}
-            }
-            match op.get_state() {
-                pulse::operation::State::Running => (),
-                pulse::operation::State::Cancelled => {
-                    return;
-                }
-                pulse::operation::State::Done => break,
-            }
-        }
+        self.wait_for_op(op);
         self.process_message();
     }
 
@@ -344,22 +334,24 @@ impl Pulse {
                 ListResult::End => {}
             });
 
-        loop {
-            // This match must be there
-            match self.mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    return;
-                }
-                IterateResult::Success(_) => {}
-            }
-            match op.get_state() {
-                pulse::operation::State::Running => (),
-                pulse::operation::State::Cancelled => {
-                    return;
-                }
-                pulse::operation::State::Done => break,
-            }
-        }
+        self.wait_for_op(op);
+        self.process_message();
+    }
+
+    fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
+        let sender = self.sender.clone();
+
+        let op = self.introspector.borrow_mut().set_sink_volume_by_index(
+            index,
+            &volume,
+            Some(Box::new(move |success| {
+                (sender
+                    .send(Vol(success))
+                    .expect("Unable to send success bool"));
+            })),
+        );
+
+        self.wait_for_op(op);
         self.process_message();
     }
 
@@ -387,37 +379,6 @@ impl Pulse {
         let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume)
-    }
-
-    fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
-        let sender = self.sender.clone();
-
-        let op = self.introspector.borrow_mut().set_sink_volume_by_index(
-            index,
-            &volume,
-            Some(Box::new(move |success| {
-                (sender
-                    .send(Vol(success))
-                    .expect("Unable to send success bool"));
-            })),
-        );
-
-        loop {
-            match self.mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    return;
-                }
-                IterateResult::Success(_) => {}
-            }
-            match op.get_state() {
-                pulse::operation::State::Running => (),
-                pulse::operation::State::Cancelled => {
-                    return;
-                }
-                pulse::operation::State::Done => break,
-            }
-        }
-        self.process_message();
     }
 
     pub fn decrease_sink_volume(&mut self, inc: &u8, name: Option<String>, idx: Option<u32>) {
