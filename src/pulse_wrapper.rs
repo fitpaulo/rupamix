@@ -355,13 +355,7 @@ impl Pulse {
         self.process_message();
     }
 
-    pub fn increase_sink_volume(
-        &mut self,
-        inc: &u8,
-        name: Option<String>,
-        idx: Option<u32>,
-        boost: bool,
-    ) {
+    fn get_sink(&mut self, idx: Option<u32>, name: Option<String>) -> Sink {
         let sink;
 
         if let Some(idx) = idx {
@@ -372,7 +366,18 @@ impl Pulse {
             sink = self.get_default_sink();
         }
 
-        let sink = sink.unwrap();
+        sink.unwrap()
+    }
+
+    pub fn increase_sink_volume(
+        &mut self,
+        inc: &u8,
+        name: Option<String>,
+        idx: Option<u32>,
+        boost: bool,
+    ) {
+        let sink = self.get_sink(idx, name);
+
         sink.borrow_mut().increase_volume(inc, boost);
 
         let index = sink.borrow().index();
@@ -382,17 +387,8 @@ impl Pulse {
     }
 
     pub fn decrease_sink_volume(&mut self, inc: &u8, name: Option<String>, idx: Option<u32>) {
-        let sink;
+        let sink = self.get_sink(idx, name);
 
-        if let Some(idx) = idx {
-            sink = self.get_sink_by_idx(idx);
-        } else if let Some(name) = name {
-            sink = self.get_sink_by_name(name);
-        } else {
-            sink = self.get_default_sink();
-        }
-
-        let sink = sink.unwrap();
         sink.borrow_mut().decrease_volume(inc);
 
         let index = sink.borrow().index();
@@ -402,17 +398,8 @@ impl Pulse {
     }
 
     pub fn toggle_mute(&mut self, name: Option<String>, idx: Option<u32>) {
-        let sink;
+        let sink = self.get_sink(idx, name);
 
-        if let Some(idx) = idx {
-            sink = self.get_sink_by_idx(idx);
-        } else if let Some(name) = name {
-            sink = self.get_sink_by_name(name);
-        } else {
-            sink = self.get_default_sink();
-        }
-
-        let sink = sink.unwrap();
         sink.borrow_mut()
             .toggle_mute()
             .expect("Unable to toggle mute");
