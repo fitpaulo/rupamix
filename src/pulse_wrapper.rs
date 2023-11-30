@@ -15,8 +15,11 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-type Sinks = Rc<RefCell<Vec<Rc<RefCell<Device>>>>>;
-type Sources = Rc<RefCell<Vec<Rc<RefCell<Device>>>>>;
+type Sink = Rc<RefCell<Device>>;
+type Source = Rc<RefCell<Device>>;
+
+type Sinks = Rc<RefCell<Vec<Sink>>>;
+type Sources = Rc<RefCell<Vec<Source>>>;
 
 enum Message {
     Sink(Device),
