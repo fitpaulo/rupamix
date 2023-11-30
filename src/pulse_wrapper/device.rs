@@ -6,20 +6,18 @@ static MAX_VOLUME: u8 = 120;
 static FILE: &str = "/tmp/rupamix_vol";
 static APPROX_ONE_PCT: VolumeDB = VolumeDB(-120.0);
 
-pub struct SinkSource {
+pub struct Device {
     index: u32,
     name: String,
     volume: ChannelVolumes,
-    mute: bool,
 }
 
-impl SinkSource {
-    pub fn new(index: u32, name: String, volume: ChannelVolumes, mute: bool) -> SinkSource {
-        SinkSource {
+impl Device {
+    pub fn new(index: u32, name: String, volume: ChannelVolumes) -> Device {
+        Device {
             index,
             name,
             volume,
-            mute,
         }
     }
 
@@ -29,10 +27,6 @@ impl SinkSource {
 
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    pub fn mute(&self) -> bool {
-        self.mute
     }
 
     pub fn volume(&self) -> ChannelVolumes {
@@ -121,10 +115,10 @@ mod tests {
     use super::*;
     static APPRROX_54_PCT: VolumeDB = VolumeDB(-16.01);
 
-    fn setup() -> SinkSource {
+    fn setup() -> Device {
         let mut volume = ChannelVolumes::default();
         volume.set(2_u8, Volume::from(APPRROX_54_PCT));
-        SinkSource {
+        Device {
             index: 150,
             name: String::from("Dummy"),
             volume,
