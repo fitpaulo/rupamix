@@ -1,7 +1,7 @@
+pub mod device;
 pub mod server_info_wrapper;
-pub mod sinksource;
+use crate::pulse_wrapper::device::Device;
 use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
-use crate::pulse_wrapper::sinksource::SinkSource;
 use pulse::callbacks::ListResult;
 use pulse::context::introspect::Introspector;
 use pulse::context::{Context, FlagSet as ContextFlagSet, State};
@@ -15,12 +15,12 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-type Sinks = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
-type Sources = Rc<RefCell<Vec<Rc<RefCell<SinkSource>>>>>;
+type Sinks = Rc<RefCell<Vec<Rc<RefCell<Device>>>>>;
+type Sources = Rc<RefCell<Vec<Rc<RefCell<Device>>>>>;
 
 enum Message {
-    Sink(SinkSource),
-    Source(SinkSource),
+    Sink(Device),
+    Source(Device),
     Vol(bool),
     ServerInfo(MyServerInfo),
     Empty,
@@ -186,7 +186,7 @@ impl Pulse {
         }
     }
 
-    fn get_sink_by_idx(&self, idx: u32) -> Option<Rc<RefCell<SinkSource>>> {
+    fn get_sink_by_idx(&self, idx: u32) -> Option<Rc<RefCell<Device>>> {
         for sink in self.sinks.borrow().deref() {
             if sink.borrow().index() == idx {
                 return Some(sink.clone());
@@ -195,7 +195,7 @@ impl Pulse {
         None
     }
 
-    fn get_sink_by_name(&self, name: String) -> Option<Rc<RefCell<SinkSource>>> {
+    fn get_sink_by_name(&self, name: String) -> Option<Rc<RefCell<Device>>> {
         for sink in self.sinks.borrow().deref() {
             if sink.borrow().name() == name {
                 return Some(sink.clone());
@@ -204,7 +204,7 @@ impl Pulse {
         None
     }
 
-    fn get_default_sink(&self) -> Option<Rc<RefCell<SinkSource>>> {
+    fn get_default_sink(&self) -> Option<Rc<RefCell<Device>>> {
         for sink in self.sinks.borrow().deref() {
             if sink.borrow().name() == self.server_info.as_ref().unwrap().default_sink_name {
                 return Some(sink.clone());
@@ -244,14 +244,14 @@ impl Pulse {
         self.server_info = Some(info);
     }
 
-    fn update_sinks(&mut self, sink: SinkSource) {
+    fn update_sinks(&mut self, sink: Device) {
         self.sinks
             .as_ref()
             .borrow_mut()
             .push(Rc::new(RefCell::new(sink)));
     }
 
-    fn update_sources(&mut self, source: SinkSource) {
+    fn update_sources(&mut self, source: Device) {
         self.sources
             .as_ref()
             .borrow_mut()
@@ -294,9 +294,8 @@ impl Pulse {
                     let name = info.name.as_ref().unwrap().to_string();
                     let idx = info.index;
                     let volume = info.volume;
-                    let mute = info.mute;
                     sender
-                        .send(Source(SinkSource::new(idx, name, volume, mute)))
+                        .send(Source(Device::new(idx, name, volume)))
                         .expect("Unable to send sinksource.")
                 }
                 ListResult::Error => {}
@@ -334,9 +333,8 @@ impl Pulse {
                     let name = info.name.as_ref().unwrap().to_string();
                     let idx = info.index;
                     let volume = info.volume;
-                    let mute = info.mute;
                     sender
-                        .send(Sink(SinkSource::new(idx, name, volume, mute)))
+                        .send(Sink(Device::new(idx, name, volume)))
                         .expect("Unable to send sinksource.")
                 }
                 ListResult::Error => {}
