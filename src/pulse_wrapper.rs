@@ -1,14 +1,10 @@
 pub mod device;
+pub mod pulse_driver;
 pub mod server_info_wrapper;
 use crate::pulse_wrapper::device::Device;
+use crate::pulse_wrapper::pulse_driver::PulseDriver;
 use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
 use pulse::callbacks::ListResult;
-use pulse::context::introspect::Introspector;
-use pulse::context::{Context, FlagSet as ContextFlagSet, State};
-use pulse::def::Retval;
-use pulse::mainloop::standard::{IterateResult, Mainloop};
-use pulse::operation::Operation;
-use pulse::proplist::Proplist;
 use pulse::volume::ChannelVolumes;
 use std::cell::RefCell;
 use std::ops::Deref;
@@ -31,9 +27,7 @@ enum Message {
 }
 
 pub struct Pulse {
-    mainloop: Rc<RefCell<Mainloop>>,
-    context: Rc<RefCell<Context>>,
-    introspector: Rc<RefCell<Introspector>>,
+    driver: PulseDriver,
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
@@ -42,59 +36,16 @@ pub struct Pulse {
 }
 
 impl Pulse {
-    pub fn connect_to_pulse() -> Option<Pulse> {
+    pub fn new() -> Result<Pulse, &'static str> {
+        let driver = PulseDriver::connect_to_pulse()?;
         let (sender, receiver) = mpsc::channel();
-
-        let mainloop = Rc::new(RefCell::new(
-            Mainloop::new().expect("Failed to create main loop."),
-        ));
-
-        let mut proplist = Proplist::new().unwrap();
-        proplist
-            .set_str(pulse::proplist::properties::APPLICATION_NAME, "RuPaMixa")
-            .unwrap();
-
-        let context = Rc::new(RefCell::new(
-            Context::new_with_proplist(mainloop.borrow().deref(), "RuPaMixaContext", &proplist)
-                .expect("Failed to create new context."),
-        ));
-
-        context
-            .borrow_mut()
-            .connect(None, ContextFlagSet::NOFLAGS, None)
-            .expect("Failed to connect to context");
-
-        // wait for context to be ready
-        loop {
-            match mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    eprintln!("Iterate state was not success, quitting...");
-                    return None;
-                }
-                IterateResult::Success(_) => {}
-            }
-            match context.borrow().get_state() {
-                State::Ready => {
-                    break;
-                }
-                State::Failed | State::Terminated => {
-                    return None;
-                }
-                _ => {}
-            }
-        }
-
-        let introspector = Rc::new(RefCell::new(context.borrow().introspect()));
-
-        Some(Pulse {
-            mainloop,
-            context,
-            introspector,
+        Ok(Pulse {
+            driver,
             sender,
             receiver,
+            server_info: None,
             sinks: Rc::new(RefCell::new(Vec::new())),
             sources: Rc::new(RefCell::new(Vec::new())),
-            server_info: None,
         })
     }
 
@@ -262,55 +213,41 @@ impl Pulse {
             .push(Rc::new(RefCell::new(source)));
     }
 
-    fn wait_for_op<T: ?Sized>(&mut self, op: Operation<T>) {
-        loop {
-            // This match must be there
-            match self.mainloop.borrow_mut().iterate(false) {
-                IterateResult::Quit(_) | IterateResult::Err(_) => {
-                    return;
-                }
-                IterateResult::Success(_) => (),
-            }
-            match op.get_state() {
-                pulse::operation::State::Running => (),
-                pulse::operation::State::Cancelled => {
-                    return;
-                }
-                pulse::operation::State::Done => break,
-            }
-        }
-    }
-
     fn get_server_info(&mut self) {
         let sender = self.sender.clone();
-        let op = self.introspector.borrow().get_server_info(move |info| {
-            let server_info = MyServerInfo::new(info);
-            sender.send(ServerInfo(server_info)).unwrap();
-        });
-        self.wait_for_op(op);
+        let op = self
+            .driver
+            .introspector
+            .borrow()
+            .get_server_info(move |info| {
+                let server_info = MyServerInfo::new(info);
+                sender.send(ServerInfo(server_info)).unwrap();
+            });
+        self.driver.wait_for_op(op);
         self.process_message();
     }
 
     fn get_source_info(&mut self) {
         let sender = self.sender.clone();
 
-        let op = self
-            .introspector
-            .borrow()
-            .get_source_info_list(move |result| match result {
-                ListResult::Item(info) => {
-                    let name = info.name.as_ref().unwrap().to_string();
-                    let idx = info.index;
-                    let volume = info.volume;
-                    sender
-                        .send(Source(Device::new(idx, name, volume)))
-                        .expect("Unable to send sinksource.")
-                }
-                ListResult::Error => {}
-                ListResult::End => {}
-            });
+        let op =
+            self.driver
+                .introspector
+                .borrow()
+                .get_source_info_list(move |result| match result {
+                    ListResult::Item(info) => {
+                        let name = info.name.as_ref().unwrap().to_string();
+                        let idx = info.index;
+                        let volume = info.volume;
+                        sender
+                            .send(Source(Device::new(idx, name, volume)))
+                            .expect("Unable to send sinksource.")
+                    }
+                    ListResult::Error => {}
+                    ListResult::End => {}
+                });
 
-        self.wait_for_op(op);
+        self.driver.wait_for_op(op);
         self.process_message();
     }
 
@@ -319,6 +256,7 @@ impl Pulse {
         let sender = self.sender.clone();
 
         let op = self
+            .driver
             .introspector
             .borrow()
             .get_sink_info_list(move |result| match result {
@@ -334,24 +272,28 @@ impl Pulse {
                 ListResult::End => {}
             });
 
-        self.wait_for_op(op);
+        self.driver.wait_for_op(op);
         self.process_message();
     }
 
     fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
         let sender = self.sender.clone();
 
-        let op = self.introspector.borrow_mut().set_sink_volume_by_index(
-            index,
-            &volume,
-            Some(Box::new(move |success| {
-                (sender
-                    .send(Vol(success))
-                    .expect("Unable to send success bool"));
-            })),
-        );
+        let op = self
+            .driver
+            .introspector
+            .borrow_mut()
+            .set_sink_volume_by_index(
+                index,
+                &volume,
+                Some(Box::new(move |success| {
+                    (sender
+                        .send(Vol(success))
+                        .expect("Unable to send success bool"));
+                })),
+            );
 
-        self.wait_for_op(op);
+        self.driver.wait_for_op(op);
         self.process_message();
     }
 
@@ -409,17 +351,6 @@ impl Pulse {
 
         self.update_sink_volume(index, volume)
     }
-
-    pub fn shutdown(&mut self) {
-        self.mainloop.borrow_mut().quit(Retval(0));
-        self.context.borrow_mut().disconnect();
-    }
-}
-
-impl Drop for Pulse {
-    fn drop(&mut self) {
-        self.shutdown();
-    }
 }
 
 #[cfg(test)]
@@ -427,7 +358,7 @@ mod tests {
     use super::*;
 
     fn setup() -> Pulse {
-        Pulse::connect_to_pulse().unwrap()
+        Pulse::new().unwrap()
     }
 
     #[test]
