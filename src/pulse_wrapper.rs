@@ -53,7 +53,15 @@ impl Pulse {
         })
     }
 
+    fn clean(&mut self) {
+        self.sinks = Rc::new(RefCell::new(Vec::new()));
+        self.sources = Rc::new(RefCell::new(Vec::new()));
+    }
+
     pub fn sync(&mut self) {
+        if self.sinks.borrow().len() > 0 || self.sources.borrow().len() > 0 {
+            self.clean();
+        }
         self.get_server_info();
         self.get_source_info();
         self.get_sink_info();
@@ -427,14 +435,17 @@ mod tests {
         let mut pulse = setup();
         pulse.sync();
 
+        // We are taking our sink here, we need to re-init it later
         let default = pulse.get_default_sink().unwrap();
 
         let initial = default.get_volume_as_pct();
 
+        // Re-init so that increase can get the sink.
+        pulse.sync();
+
         pulse.increase_sink_volume(&5, None, None, false).unwrap();
 
-        // Re-get from the system
-        let mut pulse = setup();
+        // re-init so we can get the sync and compare values
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
 
@@ -448,14 +459,17 @@ mod tests {
         let mut pulse = setup();
         pulse.sync();
 
+        // We are taking our sink here, we need to re-init it later
         let default = pulse.get_default_sink().unwrap();
 
         let initial = default.get_volume_as_pct();
 
+        //Re-init so that decrease can get the sink
+        pulse.sync();
+
         pulse.decrease_sink_volume(&5, None, None).unwrap();
 
-        // Reg-et from the system
-        let mut pulse = setup();
+        // re-init to get the updated system vol
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
 
@@ -472,19 +486,21 @@ mod tests {
 
         let initial = default.get_volume_as_pct();
 
+        // Defualt took the sink, re-init
+        pulse.sync();
+
         pulse.toggle_mute(None, None).unwrap();
 
-        // Re-get from the system
-        let mut pulse = setup();
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
         let muted = default.get_volume_as_pct();
 
         assert_eq!(muted, 0);
 
+        // Re-pop sink list
+        pulse.sync();
         pulse.toggle_mute(None, None).unwrap();
 
-        let mut pulse = setup();
         pulse.sync();
         let default = pulse.get_default_sink().unwrap();
 
