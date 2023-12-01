@@ -3,6 +3,7 @@ pub mod device_wrapper;
 pub mod pulse_driver;
 pub mod server_info_wrapper;
 pub mod sink_info;
+pub mod source_info;
 use crate::pulse_wrapper::device::Device;
 use crate::pulse_wrapper::device_wrapper::Device as NewDevice;
 use crate::pulse_wrapper::pulse_driver::PulseDriver;
