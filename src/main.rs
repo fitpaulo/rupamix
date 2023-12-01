@@ -69,10 +69,10 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> Result<(), &'static str> {
     let cli = Cli::parse();
 
-    let mut pulse = Pulse::connect_to_pulse().unwrap();
+    let mut pulse = Pulse::new()?;
     pulse.sync();
 
     match &cli.command {
@@ -101,4 +101,5 @@ fn main() {
         }
         Commands::ToggleMute => pulse.toggle_mute(cli.name, cli.idx),
     }
+    Ok(())
 }
