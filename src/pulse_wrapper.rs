@@ -8,40 +8,27 @@ pub mod source_info;
 use crate::pulse_wrapper::device_manager::{DeviceError, DeviceManager};
 use crate::pulse_wrapper::device_wrapper::Device;
 use crate::pulse_wrapper::pulse_driver::PulseDriver;
-use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
+use crate::pulse_wrapper::server_info_wrapper::PulseServerInfo;
 
 use pulse::callbacks::ListResult;
 use pulse::volume::ChannelVolumes;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc;
-
-use Message::*;
-
-enum Message {
-    Vol(bool),
-    ServerInfo(MyServerInfo),
-    Empty,
-}
 
 pub struct Pulse {
     driver: PulseDriver,
-    sender: mpsc::Sender<Message>,
-    receiver: mpsc::Receiver<Message>,
-    server_info: Option<MyServerInfo>,
+    server_info: Rc<RefCell<PulseServerInfo>>,
     devices: Rc<RefCell<DeviceManager>>,
 }
 
 impl Pulse {
     pub fn new() -> Result<Pulse, &'static str> {
         let driver = PulseDriver::connect_to_pulse()?;
-        let (sender, receiver) = mpsc::channel();
+
         Ok(Pulse {
             driver,
-            sender,
-            receiver,
-            server_info: None,
+            server_info: Rc::new(RefCell::new(PulseServerInfo::default())),
             devices: Rc::new(RefCell::new(DeviceManager::default())),
         })
     }
@@ -76,43 +63,18 @@ impl Pulse {
         self.devices.borrow_mut().print_sink_volume(index, name)
     }
 
-    fn process_message(&mut self) {
-        loop {
-            let message = self.receiver.try_recv().unwrap_or(Message::Empty);
-
-            match message {
-                ServerInfo(info) => {
-                    // println!("In serve info path");
-                    self.update_server_info(info);
-                }
-                Vol(_success) => {
-                    // println!("In Vol path");
-                }
-                Empty => {
-                    break;
-                }
-            }
-        }
-    }
-
-    fn update_server_info(&mut self, info: MyServerInfo) {
-        self.server_info = Some(info);
-    }
-
     fn get_server_info(&mut self) {
-        let sender = self.sender.clone();
+        let server_info = self.server_info.clone();
+
         let op = self
             .driver
             .introspector
             .borrow()
-            .get_server_info(move |info| {
-                let server_info = MyServerInfo::new(info);
-                sender.send(ServerInfo(server_info)).unwrap();
-            });
+            .get_server_info(move |info| server_info.borrow_mut().update(info));
+
         self.driver
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
-        self.process_message();
     }
 
     fn get_source_info(&mut self) -> Result<(), DeviceError> {
@@ -136,7 +98,7 @@ impl Pulse {
 
         self.devices
             .borrow_mut()
-            .set_default_source(&self.server_info.as_ref().unwrap().default_source_name)
+            .set_default_source(&self.server_info.borrow().default_source_name)
     }
 
     fn get_sink_info(&mut self) -> Result<(), DeviceError> {
@@ -160,30 +122,19 @@ impl Pulse {
 
         self.devices
             .borrow_mut()
-            .set_default_sink(&self.server_info.as_ref().unwrap().default_sink_name)
+            .set_default_sink(&self.server_info.borrow().default_sink_name)
     }
 
     fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
-        let sender = self.sender.clone();
-
         let op = self
             .driver
             .introspector
             .borrow_mut()
-            .set_sink_volume_by_index(
-                index,
-                &volume,
-                Some(Box::new(move |success| {
-                    (sender
-                        .send(Vol(success))
-                        .expect("Unable to send success bool"));
-                })),
-            );
+            .set_sink_volume_by_index(index, &volume, Some(Box::new(move |_success| ())));
 
         self.driver
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
-        self.process_message();
     }
 
     pub fn increase_sink_volume(
@@ -248,14 +199,6 @@ mod tests {
 
     fn setup() -> Pulse {
         Pulse::new().unwrap()
-    }
-
-    #[test]
-    fn checks_update_sereve_gets_server_info() {
-        let mut pulse = setup();
-
-        pulse.get_server_info();
-        assert!(pulse.server_info.is_some());
     }
 
     // everything below here must be run on a single thread
