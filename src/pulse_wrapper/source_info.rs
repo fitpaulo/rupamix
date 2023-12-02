@@ -12,24 +12,6 @@ pub struct PulseSourceInfo {
     base_volume: Rc<RefCell<Volume>>,
 }
 
-impl PulseSourceInfo {
-    pub fn new(
-        name: String,
-        index: u32,
-        description: String,
-        volume: Rc<RefCell<ChannelVolumes>>,
-        base_volume: Rc<RefCell<Volume>>,
-    ) -> PulseSourceInfo {
-        PulseSourceInfo {
-            name,
-            index,
-            description,
-            volume,
-            base_volume,
-        }
-    }
-}
-
 impl From<&'_ SourceInfo<'_>> for PulseSourceInfo {
     fn from(item: &SourceInfo) -> Self {
         PulseSourceInfo {

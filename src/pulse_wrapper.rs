@@ -1,5 +1,4 @@
 pub mod device;
-pub mod device_manager;
 pub mod device_wrapper;
 pub mod pulse_driver;
 pub mod server_info_wrapper;
