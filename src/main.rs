@@ -90,7 +90,7 @@ fn main() -> Result<(), &'static str> {
             }
 
             if *volume {
-                pulse.print_sink_volume(cli.idx, cli.name)?
+                let _ = pulse.print_sink_volume(cli.idx, cli.name);
             }
         }
         Commands::IncreaseVolume { inc, boost } => {
