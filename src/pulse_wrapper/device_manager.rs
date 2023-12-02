@@ -119,6 +119,41 @@ impl DeviceManager {
         }
         None
     }
+
+    pub fn print_sources(&self) {
+        let mut len_idx = 0;
+        let mut len_name = 0;
+
+        for source in self.sources.as_ref().borrow().clone() {
+            let len = source.borrow().index().to_string().len();
+            if len > len_idx {
+                len_idx = len;
+            }
+            let len = source.borrow().name().len();
+            if len > len_name {
+                len_name = len;
+            }
+        }
+
+        len_idx += 10; // len of '(default) '
+        let sum = len_idx + len_name + 6;
+
+        println!();
+        println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
+        println!("{:-<sum$}", "");
+        for source in self.sources.as_ref().borrow_mut().clone() {
+            if source.borrow().name() == self.default_source.as_ref().unwrap().borrow().name() {
+                let idx = format!("(default) {}", source.borrow().index());
+                println!("{:>len_idx$} -- {:<len_name$}", idx, source.borrow().name());
+            } else {
+                println!(
+                    "{:>len_idx$} -- {:<len_name$}",
+                    source.borrow().index(),
+                    source.borrow().name()
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
