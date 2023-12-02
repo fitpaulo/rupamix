@@ -4,23 +4,20 @@ pub mod pulse_driver;
 pub mod server_info_wrapper;
 pub mod sink_info;
 pub mod source_info;
-use crate::pulse_wrapper::device_manager::DeviceManager;
+
+use crate::pulse_wrapper::device_manager::{DeviceError, DeviceManager};
 use crate::pulse_wrapper::device_wrapper::Device;
 use crate::pulse_wrapper::pulse_driver::PulseDriver;
 use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
-use crate::pulse_wrapper::sink_info::PulseSinkInfo;
+
 use pulse::callbacks::ListResult;
 use pulse::volume::ChannelVolumes;
 use std::cell::RefCell;
-use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-type Sinks = Rc<RefCell<Vec<PulseSinkInfo>>>;
-
 enum Message {
-    Sink(PulseSinkInfo),
     Vol(bool),
     ServerInfo(MyServerInfo),
     Empty,
@@ -32,7 +29,6 @@ pub struct Pulse {
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
     devices: Rc<RefCell<DeviceManager>>,
-    sinks: Sinks,
 }
 
 impl Pulse {
@@ -44,22 +40,22 @@ impl Pulse {
             sender,
             receiver,
             server_info: None,
-            sinks: Rc::new(RefCell::new(Vec::new())),
             devices: Rc::new(RefCell::new(DeviceManager::default())),
         })
     }
 
-    fn clean(&mut self) {
-        self.sinks = Rc::new(RefCell::new(Vec::new()));
+    pub fn sync(&mut self) {
+        self.get_server_info();
+        // Currently we throw away these Results
+        let _ = self.get_source_info();
+        let _ = self.get_sink_info();
     }
 
-    pub fn sync(&mut self) {
-        if self.sinks.borrow().len() > 0 {
-            self.clean();
-        }
-        self.get_server_info();
-        self.get_source_info();
-        self.get_sink_info();
+    /// Sync is not idempotent so we need to reset it's fields
+    /// before we call sync on it again.
+    pub fn update(&mut self) {
+        self.devices.borrow_mut().reset();
+        self.sync();
     }
 
     pub fn print_sources(&self) {
@@ -67,78 +63,15 @@ impl Pulse {
     }
 
     pub fn print_sinks(&self) {
-        let mut len_idx = 0;
-        let mut len_name = 0;
-
-        for sink in self.sinks.as_ref().borrow().deref() {
-            let len = sink.index().to_string().len();
-            if len > len_idx {
-                len_idx = len;
-            }
-            let len = sink.name().len();
-            if len > len_name {
-                len_name = len;
-            }
-        }
-
-        len_idx += 10; // len of '(default) '
-        let sum = len_idx + len_name + 6;
-
-        println!();
-        println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
-        println!("{:-<sum$}", "");
-        for sink in self.sinks.as_ref().borrow().deref() {
-            if sink.name() == self.server_info.as_ref().unwrap().default_sink_name {
-                let idx = format!("(default) {}", sink.index());
-                println!("{:>len_idx$} -- {:<len_name$}", idx, sink.name());
-            } else {
-                println!("{:>len_idx$} -- {:<len_name$}", sink.index(), sink.name());
-            }
-        }
+        self.devices.borrow().print_sinks();
     }
 
     pub fn print_sink_volume(
         &self,
-        idx: Option<u32>,
+        index: Option<u32>,
         name: Option<String>,
-    ) -> Result<(), &'static str> {
-        let sink;
-        if let Some(idx) = idx {
-            sink = self.get_sink_by_idx(idx)?;
-        } else if let Some(name) = name {
-            sink = self.get_sink_by_name(name)?;
-        } else {
-            sink = self.get_default_sink()?;
-        }
-        sink.print_volume();
-        Ok(())
-    }
-
-    fn get_sink_by_idx(&self, idx: u32) -> Result<PulseSinkInfo, &'static str> {
-        for sink in self.sinks.take() {
-            if sink.index() == idx {
-                return Ok(sink);
-            }
-        }
-        Err("No sink with index {idx}")
-    }
-
-    fn get_sink_by_name(&self, name: String) -> Result<PulseSinkInfo, &'static str> {
-        for sink in self.sinks.take() {
-            if sink.name() == name {
-                return Ok(sink);
-            }
-        }
-        Err("No sink with name {name}")
-    }
-
-    fn get_default_sink(&self) -> Result<PulseSinkInfo, &'static str> {
-        for sink in self.sinks.take() {
-            if sink.name() == self.server_info.as_ref().unwrap().default_sink_name {
-                return Ok(sink);
-            }
-        }
-        Err("No default sink, did you sync() the data?")
+    ) -> Result<(), DeviceError> {
+        self.devices.borrow_mut().print_sink_volume(index, name)
     }
 
     fn process_message(&mut self) {
@@ -146,10 +79,6 @@ impl Pulse {
             let message = self.receiver.try_recv().unwrap_or(Message::Empty);
 
             match message {
-                Sink(sink) => {
-                    // println!("In Sink path");
-                    self.update_sinks(sink);
-                }
                 ServerInfo(info) => {
                     // println!("In serve info path");
                     self.update_server_info(info);
@@ -168,10 +97,6 @@ impl Pulse {
         self.server_info = Some(info);
     }
 
-    fn update_sinks(&mut self, sink: PulseSinkInfo) {
-        self.sinks.as_ref().borrow_mut().push(sink);
-    }
-
     fn get_server_info(&mut self) {
         let sender = self.sender.clone();
         let op = self
@@ -188,7 +113,7 @@ impl Pulse {
         self.process_message();
     }
 
-    fn get_source_info(&mut self) {
+    fn get_source_info(&mut self) -> Result<(), DeviceError> {
         let manager = self.devices.clone();
 
         let op =
@@ -206,20 +131,23 @@ impl Pulse {
         self.driver
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
+
+        self.devices
+            .borrow_mut()
+            .set_default_source(&self.server_info.as_ref().unwrap().default_source_name)
     }
 
-    fn get_sink_info(&mut self) {
-        // println!("In get sink info method");
-        let sender = self.sender.clone();
+    fn get_sink_info(&mut self) -> Result<(), DeviceError> {
+        let manager = self.devices.clone();
 
         let op = self
             .driver
             .introspector
             .borrow()
             .get_sink_info_list(move |result| match result {
-                ListResult::Item(info) => sender
-                    .send(Sink(PulseSinkInfo::from(info)))
-                    .expect("Unable to send sinksource."),
+                ListResult::Item(info) => {
+                    manager.borrow_mut().add_sink(info);
+                }
                 ListResult::Error => {}
                 ListResult::End => {}
             });
@@ -227,7 +155,10 @@ impl Pulse {
         self.driver
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
-        self.process_message();
+
+        self.devices
+            .borrow_mut()
+            .set_default_sink(&self.server_info.as_ref().unwrap().default_sink_name)
     }
 
     fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
@@ -253,24 +184,6 @@ impl Pulse {
         self.process_message();
     }
 
-    fn get_sink(
-        &mut self,
-        idx: Option<u32>,
-        name: Option<String>,
-    ) -> Result<PulseSinkInfo, &'static str> {
-        let sink;
-
-        if let Some(idx) = idx {
-            sink = self.get_sink_by_idx(idx);
-        } else if let Some(name) = name {
-            sink = self.get_sink_by_name(name);
-        } else {
-            sink = self.get_default_sink();
-        }
-
-        sink
-    }
-
     pub fn increase_sink_volume(
         &mut self,
         inc: &u8,
@@ -278,12 +191,12 @@ impl Pulse {
         idx: Option<u32>,
         boost: bool,
     ) -> Result<(), &'static str> {
-        let mut sink = self.get_sink(idx, name)?;
+        let sink = self.devices.borrow_mut().get_sink(idx, name).ok().unwrap();
 
-        sink.increase_volume(inc, boost);
+        sink.borrow_mut().increase_volume(inc, boost);
 
-        let index = sink.index();
-        let volume = sink.volume();
+        let index = sink.borrow().index();
+        let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume.take());
         Ok(())
@@ -295,12 +208,12 @@ impl Pulse {
         name: Option<String>,
         idx: Option<u32>,
     ) -> Result<(), &'static str> {
-        let mut sink = self.get_sink(idx, name)?;
+        let sink = self.devices.borrow_mut().get_sink(idx, name).ok().unwrap();
 
-        sink.decrease_volume(inc);
+        sink.borrow_mut().decrease_volume(inc);
 
-        let index = sink.index();
-        let volume = sink.volume();
+        let index = sink.borrow().index();
+        let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume.take());
         Ok(())
@@ -311,12 +224,14 @@ impl Pulse {
         name: Option<String>,
         idx: Option<u32>,
     ) -> Result<(), &'static str> {
-        let mut sink = self.get_sink(idx, name)?;
+        let sink = self.devices.borrow_mut().get_sink(idx, name).ok().unwrap();
 
-        sink.toggle_mute().expect("Unable to toggle mute");
+        sink.borrow_mut()
+            .toggle_mute()
+            .expect("Unable to toggle mute");
 
-        let index = sink.index();
-        let volume = sink.volume();
+        let index = sink.borrow().index();
+        let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume.take());
         Ok(())
@@ -326,6 +241,8 @@ impl Pulse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    static BOOST: bool = false;
+    static INC: u8 = 5;
 
     fn setup() -> Pulse {
         Pulse::new().unwrap()
@@ -337,26 +254,6 @@ mod tests {
 
         pulse.get_server_info();
         assert!(pulse.server_info.is_some());
-    }
-
-    #[test]
-    fn checks_get_sinks_builds_a_vec() {
-        let mut pulse = setup();
-        pulse.get_sink_info();
-
-        pulse.get_sink_info();
-
-        assert!(pulse.sinks.borrow().len() > 0);
-    }
-
-    #[test]
-    fn verify_get_default_sink_returns_a_sink() {
-        let mut pulse = setup();
-        pulse.sync();
-
-        let default = pulse.get_default_sink();
-
-        assert!(default.is_ok())
     }
 
     // everything below here must be run on a single thread
@@ -373,20 +270,17 @@ mod tests {
         pulse.sync();
 
         // We are taking our sink here, we need to re-init it later
-        let default = pulse.get_default_sink().unwrap();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
 
-        let initial = default.get_volume_as_pct();
+        let initial = default.borrow().get_volume_as_pct();
 
-        // Re-init so that increase can get the sink.
-        pulse.sync();
-
-        pulse.increase_sink_volume(&5, None, None, false).unwrap();
+        let _ = pulse.increase_sink_volume(&INC, None, None, BOOST);
 
         // re-init so we can get the sync and compare values
-        pulse.sync();
-        let default = pulse.get_default_sink().unwrap();
+        pulse.update();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
 
-        assert_eq!(initial + 5, default.get_volume_as_pct());
+        assert_eq!(initial + 5, default.borrow().get_volume_as_pct());
     }
 
     #[test]
@@ -396,21 +290,18 @@ mod tests {
         let mut pulse = setup();
         pulse.sync();
 
-        // We are taking our sink here, we need to re-init it later
-        let default = pulse.get_default_sink().unwrap();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
 
-        let initial = default.get_volume_as_pct();
+        let initial = default.borrow().get_volume_as_pct();
 
         //Re-init so that decrease can get the sink
-        pulse.sync();
-
         pulse.decrease_sink_volume(&5, None, None).unwrap();
 
         // re-init to get the updated system vol
-        pulse.sync();
-        let default = pulse.get_default_sink().unwrap();
+        pulse.update();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
 
-        assert_eq!(initial - 5, default.get_volume_as_pct());
+        assert_eq!(initial - 5, default.borrow().get_volume_as_pct());
     }
 
     #[test]
@@ -419,28 +310,25 @@ mod tests {
         let mut pulse = setup();
         pulse.sync();
 
-        let default = pulse.get_default_sink().unwrap();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
 
-        let initial = default.get_volume_as_pct();
+        let initial = default.borrow().get_volume_as_pct();
 
         // Defualt took the sink, re-init
-        pulse.sync();
-
         pulse.toggle_mute(None, None).unwrap();
 
-        pulse.sync();
-        let default = pulse.get_default_sink().unwrap();
-        let muted = default.get_volume_as_pct();
+        pulse.update();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let muted = default.borrow().get_volume_as_pct();
 
         assert_eq!(muted, 0);
 
         // Re-pop sink list
-        pulse.sync();
         pulse.toggle_mute(None, None).unwrap();
 
-        pulse.sync();
-        let default = pulse.get_default_sink().unwrap();
+        pulse.update();
+        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
 
-        assert_eq!(initial, default.get_volume_as_pct());
+        assert_eq!(initial, default.borrow().get_volume_as_pct());
     }
 }

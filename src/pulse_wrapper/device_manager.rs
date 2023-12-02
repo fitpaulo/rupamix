@@ -13,6 +13,13 @@ type Source = Rc<RefCell<PulseSourceInfo>>;
 type Sinks = Rc<RefCell<Vec<Sink>>>;
 type Sources = Rc<RefCell<Vec<Source>>>;
 
+pub enum DeviceError {
+    NameNotFound(String),
+    IndexNotFound(String),
+    DefaultNotFound(String),
+    NoSinks(String),
+}
+
 #[derive(Default)]
 pub struct DeviceManager {
     sources: Sources,
@@ -32,8 +39,14 @@ impl DeviceManager {
         self.sinks.clone()
     }
 
-    pub fn default_sink(&mut self) -> Sink {
-        self.default_sink.as_ref().unwrap().clone()
+    pub fn get_default_sink(&mut self) -> Result<Sink, DeviceError> {
+        if let Some(default) = self.default_sink.clone() {
+            Ok(default.clone())
+        } else {
+            Err(DeviceError::DefaultNotFound(
+                "No defualt is currently set.".to_string(),
+            ))
+        }
     }
 
     pub fn default_source(&mut self) -> Source {
@@ -46,6 +59,15 @@ impl DeviceManager {
 
     pub fn sinks_count(&self) -> u32 {
         self.sinks_count
+    }
+
+    pub fn reset(&mut self) {
+        self.sinks = Rc::new(RefCell::new(Vec::new()));
+        self.sources = Rc::new(RefCell::new(Vec::new()));
+        self.default_sink = None;
+        self.default_source = None;
+        self.sources_count = 0;
+        self.sinks_count = 0;
     }
 
     pub fn add_source(&mut self, source_info: &SourceInfo) -> u32 {
@@ -64,60 +86,110 @@ impl DeviceManager {
         self.sinks_count
     }
 
-    pub fn set_default_source(&mut self, name: &str) -> Result<(), &'static str> {
+    pub fn set_default_source(&mut self, name: &str) -> Result<(), DeviceError> {
         for source in self.sources.borrow_mut().clone() {
             if name == source.borrow().name() {
                 self.default_source = Some(source.clone());
                 return Ok(());
             }
         }
-        Err("Unable to set default source")
+
+        Err(DeviceError::NameNotFound(format!(
+            "No source found with name: {name}"
+        )))
     }
 
-    pub fn set_default_sink(&mut self, name: &str) -> Result<(), &'static str> {
+    pub fn set_default_sink(&mut self, name: &str) -> Result<(), DeviceError> {
         for sink in self.sinks.borrow_mut().clone() {
             if name == sink.borrow().name() {
                 self.default_sink = Some(sink.clone());
                 return Ok(());
             }
         }
-        Err("Unable to set default sink")
+
+        Err(DeviceError::NameNotFound(format!(
+            "No sink found with name: {name}"
+        )))
     }
 
-    pub fn get_sink_by_name(&mut self, name: &str) -> Option<Sink> {
+    pub fn get_sink_by_name(&mut self, name: &str) -> Result<Sink, DeviceError> {
         for sink in self.sinks.borrow_mut().clone() {
             if name == sink.borrow().name() {
-                return Some(sink.clone());
+                return Ok(sink.clone());
             }
         }
-        None
+
+        Err(DeviceError::NameNotFound(format!(
+            "No sink found with name: {name}"
+        )))
     }
 
-    pub fn get_sink_by_index(&mut self, index: u32) -> Option<Sink> {
+    pub fn get_sink_by_index(&mut self, index: u32) -> Result<Sink, DeviceError> {
         for sink in self.sinks.borrow_mut().clone() {
             if index == sink.borrow().index() {
-                return Some(sink.clone());
+                return Ok(sink.clone());
             }
         }
-        None
+
+        Err(DeviceError::NameNotFound(format!(
+            "No sink found with index: {index}"
+        )))
     }
 
-    pub fn get_source_by_name(&mut self, name: &str) -> Option<Source> {
+    pub fn get_source_by_name(&mut self, name: &str) -> Result<Source, DeviceError> {
         for source in self.sources.borrow_mut().clone() {
             if name == source.borrow().name() {
-                return Some(source.clone());
+                return Ok(source.clone());
             }
         }
-        None
+
+        Err(DeviceError::NameNotFound(format!(
+            "No source found with name: {name}"
+        )))
     }
 
-    pub fn get_source_by_index(&mut self, index: u32) -> Option<Source> {
+    pub fn get_source_by_index(&mut self, index: u32) -> Result<Source, DeviceError> {
         for source in self.sources.borrow_mut().clone() {
             if index == source.borrow().index() {
-                return Some(source.clone());
+                return Ok(source.clone());
             }
         }
-        None
+
+        Err(DeviceError::NameNotFound(format!(
+            "No source found with index: {index}"
+        )))
+    }
+
+    pub fn print_sink_volume(
+        &mut self,
+        index: Option<u32>,
+        name: Option<String>,
+    ) -> Result<(), DeviceError> {
+        let sink = self.get_sink(index, name)?;
+        sink.borrow().print_volume();
+        Ok(())
+    }
+
+    pub fn get_sink(
+        &mut self,
+        index: Option<u32>,
+        name: Option<String>,
+    ) -> Result<Sink, DeviceError> {
+        let sink;
+        if let Some(index) = index {
+            sink = self.get_sink_by_index(index);
+        } else if let Some(name) = name.clone() {
+            sink = self.get_sink_by_name(&name);
+        } else {
+            sink = self.get_default_sink();
+        }
+        if sink.is_ok() {
+            sink
+        } else {
+            Err(DeviceError::NoSinks(format!(
+                "Unable to get a sink for index: {index:?}, name: {name:?}"
+            )))
+        }
     }
 
     pub fn print_sources(&self) {
@@ -150,6 +222,41 @@ impl DeviceManager {
                     "{:>len_idx$} -- {:<len_name$}",
                     source.borrow().index(),
                     source.borrow().name()
+                );
+            }
+        }
+    }
+
+    pub fn print_sinks(&self) {
+        let mut len_idx = 0;
+        let mut len_name = 0;
+
+        for sink in self.sinks.as_ref().borrow().clone() {
+            let len = sink.borrow().index().to_string().len();
+            if len > len_idx {
+                len_idx = len;
+            }
+            let len = sink.borrow().name().len();
+            if len > len_name {
+                len_name = len;
+            }
+        }
+
+        len_idx += 10; // len of '(default) '
+        let sum = len_idx + len_name + 6;
+
+        println!();
+        println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
+        println!("{:-<sum$}", "");
+        for sink in self.sinks.as_ref().borrow_mut().clone() {
+            if sink.borrow().name() == self.default_sink.as_ref().unwrap().borrow().name() {
+                let idx = format!("(default) {}", sink.borrow().index());
+                println!("{:>len_idx$} -- {:<len_name$}", idx, sink.borrow().name());
+            } else {
+                println!(
+                    "{:>len_idx$} -- {:<len_name$}",
+                    sink.borrow().index(),
+                    sink.borrow().name()
                 );
             }
         }
@@ -247,8 +354,8 @@ mod tets {
 
         let sink = manager.get_sink_by_index(IDX);
 
-        assert!(sink.is_some());
-        assert_eq!(sink.unwrap().borrow().index(), IDX);
+        assert!(sink.is_ok());
+        assert_eq!(sink.ok().unwrap().borrow().index(), IDX);
     }
 
     #[test]
@@ -257,8 +364,8 @@ mod tets {
 
         let sink = manager.get_sink_by_name(NAME);
 
-        assert!(sink.is_some());
-        assert_eq!(sink.unwrap().borrow().name(), NAME);
+        assert!(sink.is_ok());
+        assert_eq!(sink.ok().unwrap().borrow().name(), NAME);
     }
 
     #[test]
@@ -267,8 +374,8 @@ mod tets {
 
         let source = manager.get_source_by_index(IDX);
 
-        assert!(source.is_some());
-        assert_eq!(source.unwrap().borrow().index(), IDX);
+        assert!(source.is_ok());
+        assert_eq!(source.ok().unwrap().borrow().index(), IDX);
     }
 
     #[test]
@@ -277,8 +384,8 @@ mod tets {
 
         let source = manager.get_source_by_name(NAME);
 
-        assert!(source.is_some());
-        assert_eq!(source.unwrap().borrow().name(), NAME);
+        assert!(source.is_ok());
+        assert_eq!(source.ok().unwrap().borrow().name(), NAME);
     }
 
     #[test]
@@ -289,9 +396,9 @@ mod tets {
 
         assert!(res.is_ok());
 
-        let default = manager.default_sink();
+        let default = manager.get_default_sink();
 
-        assert_eq!(NAME, default.borrow().name());
+        assert_eq!(NAME, default.ok().unwrap().borrow().name());
     }
 
     #[test]
