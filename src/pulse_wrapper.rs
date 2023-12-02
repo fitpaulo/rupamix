@@ -12,9 +12,11 @@ use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
 
 use pulse::callbacks::ListResult;
 use pulse::volume::ChannelVolumes;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
+
 use Message::*;
 
 enum Message {
@@ -59,11 +61,11 @@ impl Pulse {
     }
 
     pub fn print_sources(&self) {
-        self.devices.borrow().print_sources();
+        self.devices.borrow_mut().print_sources();
     }
 
     pub fn print_sinks(&self) {
-        self.devices.borrow().print_sinks();
+        self.devices.borrow_mut().print_sinks();
     }
 
     pub fn print_sink_volume(

@@ -10,9 +10,6 @@ use std::rc::Rc;
 type Sink = Rc<RefCell<PulseSinkInfo>>;
 type Source = Rc<RefCell<PulseSourceInfo>>;
 
-type Sinks = Rc<RefCell<Vec<Sink>>>;
-type Sources = Rc<RefCell<Vec<Source>>>;
-
 pub enum DeviceError {
     NameNotFound(String),
     IndexNotFound(String),
@@ -22,8 +19,8 @@ pub enum DeviceError {
 
 #[derive(Default)]
 pub struct DeviceManager {
-    sources: Sources,
-    sinks: Sinks,
+    sources: Vec<Source>,
+    sinks: Vec<Sink>,
     sources_count: u32,
     sinks_count: u32,
     default_sink: Option<Sink>,
@@ -31,12 +28,12 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub fn sources(&mut self) -> Sources {
-        self.sources.clone()
+    pub fn sources(&mut self) -> &[Source] {
+        &self.sources
     }
 
-    pub fn sinks(&mut self) -> Sinks {
-        self.sinks.clone()
+    pub fn sinks(&mut self) -> &[Sink] {
+        &self.sinks
     }
 
     pub fn get_default_sink(&mut self) -> Result<Sink, DeviceError> {
@@ -53,6 +50,10 @@ impl DeviceManager {
         self.default_source.as_ref().unwrap().clone()
     }
 
+    pub fn default_sink(&mut self) -> Sink {
+        self.default_sink.as_ref().unwrap().clone()
+    }
+
     pub fn sources_count(&self) -> u32 {
         self.sources_count
     }
@@ -62,8 +63,8 @@ impl DeviceManager {
     }
 
     pub fn reset(&mut self) {
-        self.sinks = Rc::new(RefCell::new(Vec::new()));
-        self.sources = Rc::new(RefCell::new(Vec::new()));
+        self.sinks = Vec::new();
+        self.sources = Vec::new();
         self.default_sink = None;
         self.default_source = None;
         self.sources_count = 0;
@@ -72,7 +73,6 @@ impl DeviceManager {
 
     pub fn add_source(&mut self, source_info: &SourceInfo) -> u32 {
         self.sources
-            .borrow_mut()
             .push(Rc::new(RefCell::new(PulseSourceInfo::from(source_info))));
         self.sources_count += 1;
         self.sources_count
@@ -80,14 +80,13 @@ impl DeviceManager {
 
     pub fn add_sink(&mut self, sink_info: &SinkInfo) -> u32 {
         self.sinks
-            .borrow_mut()
             .push(Rc::new(RefCell::new(PulseSinkInfo::from(sink_info))));
         self.sinks_count += 1;
         self.sinks_count
     }
 
     pub fn set_default_source(&mut self, name: &str) -> Result<(), DeviceError> {
-        for source in self.sources.borrow_mut().clone() {
+        for source in self.sources() {
             if name == source.borrow().name() {
                 self.default_source = Some(source.clone());
                 return Ok(());
@@ -100,7 +99,7 @@ impl DeviceManager {
     }
 
     pub fn set_default_sink(&mut self, name: &str) -> Result<(), DeviceError> {
-        for sink in self.sinks.borrow_mut().clone() {
+        for sink in self.sinks() {
             if name == sink.borrow().name() {
                 self.default_sink = Some(sink.clone());
                 return Ok(());
@@ -113,7 +112,7 @@ impl DeviceManager {
     }
 
     pub fn get_sink_by_name(&mut self, name: &str) -> Result<Sink, DeviceError> {
-        for sink in self.sinks.borrow_mut().clone() {
+        for sink in self.sinks() {
             if name == sink.borrow().name() {
                 return Ok(sink.clone());
             }
@@ -125,7 +124,7 @@ impl DeviceManager {
     }
 
     pub fn get_sink_by_index(&mut self, index: u32) -> Result<Sink, DeviceError> {
-        for sink in self.sinks.borrow_mut().clone() {
+        for sink in self.sinks() {
             if index == sink.borrow().index() {
                 return Ok(sink.clone());
             }
@@ -137,7 +136,7 @@ impl DeviceManager {
     }
 
     pub fn get_source_by_name(&mut self, name: &str) -> Result<Source, DeviceError> {
-        for source in self.sources.borrow_mut().clone() {
+        for source in self.sources() {
             if name == source.borrow().name() {
                 return Ok(source.clone());
             }
@@ -149,7 +148,7 @@ impl DeviceManager {
     }
 
     pub fn get_source_by_index(&mut self, index: u32) -> Result<Source, DeviceError> {
-        for source in self.sources.borrow_mut().clone() {
+        for source in self.sources() {
             if index == source.borrow().index() {
                 return Ok(source.clone());
             }
@@ -192,11 +191,15 @@ impl DeviceManager {
         }
     }
 
-    pub fn print_sources(&self) {
+    pub fn print_sources(&mut self) {
         let mut len_idx = 0;
         let mut len_name = 0;
 
-        for source in self.sources.as_ref().borrow().clone() {
+        // need to do this here so that we can make compare later
+        // otherwise we'd be borrowing mut twice
+        let default = self.default_source();
+
+        for source in self.sources() {
             let len = source.borrow().index().to_string().len();
             if len > len_idx {
                 len_idx = len;
@@ -213,8 +216,8 @@ impl DeviceManager {
         println!();
         println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
         println!("{:-<sum$}", "");
-        for source in self.sources.as_ref().borrow_mut().clone() {
-            if source.borrow().name() == self.default_source.as_ref().unwrap().borrow().name() {
+        for source in self.sources() {
+            if source.borrow().name() == default.borrow().name() {
                 let idx = format!("(default) {}", source.borrow().index());
                 println!("{:>len_idx$} -- {:<len_name$}", idx, source.borrow().name());
             } else {
@@ -227,11 +230,12 @@ impl DeviceManager {
         }
     }
 
-    pub fn print_sinks(&self) {
+    pub fn print_sinks(&mut self) {
         let mut len_idx = 0;
         let mut len_name = 0;
+        let default = self.default_sink();
 
-        for sink in self.sinks.as_ref().borrow().clone() {
+        for sink in self.sinks() {
             let len = sink.borrow().index().to_string().len();
             if len > len_idx {
                 len_idx = len;
@@ -248,8 +252,8 @@ impl DeviceManager {
         println!();
         println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
         println!("{:-<sum$}", "");
-        for sink in self.sinks.as_ref().borrow_mut().clone() {
-            if sink.borrow().name() == self.default_sink.as_ref().unwrap().borrow().name() {
+        for sink in self.sinks() {
+            if sink.borrow().name() == default.borrow().name() {
                 let idx = format!("(default) {}", sink.borrow().index());
                 println!("{:>len_idx$} -- {:<len_name$}", idx, sink.borrow().name());
             } else {
@@ -276,15 +280,13 @@ mod tets {
 
     impl DeviceManager {
         fn mock_add_source(&mut self, source: PulseSourceInfo) -> u32 {
-            self.sources
-                .borrow_mut()
-                .push(Rc::new(RefCell::new(source)));
+            self.sources.push(Rc::new(RefCell::new(source)));
             self.sources_count += 1;
             self.sources_count
         }
 
         fn mock_add_sink(&mut self, sink: PulseSinkInfo) -> u32 {
-            self.sinks.borrow_mut().push(Rc::new(RefCell::new(sink)));
+            self.sinks.push(Rc::new(RefCell::new(sink)));
             self.sinks_count += 1;
             self.sinks_count
         }
@@ -334,7 +336,7 @@ mod tets {
         let source_count = manager.mock_add_source(source);
 
         assert_eq!(source_count, manager.sources_count());
-        assert!(manager.sources().borrow_mut().len() == 1);
+        assert!(manager.sources().len() == 1);
     }
 
     #[test]
@@ -345,7 +347,7 @@ mod tets {
         let sink_count = manager.mock_add_sink(source);
 
         assert_eq!(sink_count, manager.sinks_count());
-        assert!(manager.sinks().borrow_mut().len() == 1);
+        assert!(manager.sinks().len() == 1);
     }
 
     #[test]
