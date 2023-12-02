@@ -1,12 +1,11 @@
-pub mod device;
 pub mod device_manager;
 pub mod device_wrapper;
 pub mod pulse_driver;
 pub mod server_info_wrapper;
 pub mod sink_info;
 pub mod source_info;
-use crate::pulse_wrapper::device::Device;
-use crate::pulse_wrapper::device_wrapper::Device as NewDevice;
+use crate::pulse_wrapper::device_manager::DeviceManager;
+use crate::pulse_wrapper::device_wrapper::Device;
 use crate::pulse_wrapper::pulse_driver::PulseDriver;
 use crate::pulse_wrapper::server_info_wrapper::MyServerInfo;
 use crate::pulse_wrapper::sink_info::PulseSinkInfo;
@@ -18,15 +17,10 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use Message::*;
 
-// type Sink = Rc<RefCell<Device>>;
-type Source = Rc<RefCell<Device>>;
-
 type Sinks = Rc<RefCell<Vec<PulseSinkInfo>>>;
-type Sources = Rc<RefCell<Vec<Source>>>;
 
 enum Message {
     Sink(PulseSinkInfo),
-    Source(Device),
     Vol(bool),
     ServerInfo(MyServerInfo),
     Empty,
@@ -37,8 +31,8 @@ pub struct Pulse {
     sender: mpsc::Sender<Message>,
     receiver: mpsc::Receiver<Message>,
     server_info: Option<MyServerInfo>,
+    devices: Rc<RefCell<DeviceManager>>,
     sinks: Sinks,
-    sources: Sources,
 }
 
 impl Pulse {
@@ -51,17 +45,16 @@ impl Pulse {
             receiver,
             server_info: None,
             sinks: Rc::new(RefCell::new(Vec::new())),
-            sources: Rc::new(RefCell::new(Vec::new())),
+            devices: Rc::new(RefCell::new(DeviceManager::default())),
         })
     }
 
     fn clean(&mut self) {
         self.sinks = Rc::new(RefCell::new(Vec::new()));
-        self.sources = Rc::new(RefCell::new(Vec::new()));
     }
 
     pub fn sync(&mut self) {
-        if self.sinks.borrow().len() > 0 || self.sources.borrow().len() > 0 {
+        if self.sinks.borrow().len() > 0 {
             self.clean();
         }
         self.get_server_info();
@@ -70,38 +63,7 @@ impl Pulse {
     }
 
     pub fn print_sources(&self) {
-        let mut len_idx = 0;
-        let mut len_name = 0;
-
-        for source in self.sources.as_ref().borrow().deref() {
-            let len = source.borrow().index().to_string().len();
-            if len > len_idx {
-                len_idx = len;
-            }
-            let len = source.borrow().name().len();
-            if len > len_name {
-                len_name = len;
-            }
-        }
-
-        len_idx += 10; // len of '(default) '
-        let sum = len_idx + len_name + 6;
-
-        println!();
-        println!("{:>len_idx$} -- {:<len_name$}", "Index", "Name");
-        println!("{:-<sum$}", "");
-        for source in self.sources.as_ref().borrow().deref() {
-            if source.borrow().name() == self.server_info.as_ref().unwrap().default_source_name {
-                let idx = format!("(default) {}", source.borrow().index());
-                println!("{:>len_idx$} -- {:<len_name$}", idx, source.borrow().name());
-            } else {
-                println!(
-                    "{:>len_idx$} -- {:<len_name$}",
-                    source.borrow().index(),
-                    source.borrow().name()
-                );
-            }
-        }
+        self.devices.borrow().print_sources();
     }
 
     pub fn print_sinks(&self) {
@@ -188,10 +150,6 @@ impl Pulse {
                     // println!("In Sink path");
                     self.update_sinks(sink);
                 }
-                Source(source) => {
-                    // println!("In Source path");
-                    self.update_sources(source);
-                }
                 ServerInfo(info) => {
                     // println!("In serve info path");
                     self.update_server_info(info);
@@ -214,13 +172,6 @@ impl Pulse {
         self.sinks.as_ref().borrow_mut().push(sink);
     }
 
-    fn update_sources(&mut self, source: Device) {
-        self.sources
-            .as_ref()
-            .borrow_mut()
-            .push(Rc::new(RefCell::new(source)));
-    }
-
     fn get_server_info(&mut self) {
         let sender = self.sender.clone();
         let op = self
@@ -238,7 +189,7 @@ impl Pulse {
     }
 
     fn get_source_info(&mut self) {
-        let sender = self.sender.clone();
+        let manager = self.devices.clone();
 
         let op =
             self.driver
@@ -246,12 +197,7 @@ impl Pulse {
                 .borrow()
                 .get_source_info_list(move |result| match result {
                     ListResult::Item(info) => {
-                        let name = info.name.as_ref().unwrap().to_string();
-                        let idx = info.index;
-                        let volume = info.volume;
-                        sender
-                            .send(Source(Device::new(idx, name, volume)))
-                            .expect("Unable to send sinksource.")
+                        manager.borrow_mut().add_source(info);
                     }
                     ListResult::Error => {}
                     ListResult::End => {}
@@ -260,7 +206,6 @@ impl Pulse {
         self.driver
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
-        self.process_message();
     }
 
     fn get_sink_info(&mut self) {
@@ -402,16 +347,6 @@ mod tests {
         pulse.get_sink_info();
 
         assert!(pulse.sinks.borrow().len() > 0);
-    }
-
-    #[test]
-    fn checks_get_sources_builds_a_vec() {
-        let mut pulse = setup();
-        pulse.get_source_info();
-
-        pulse.get_source_info();
-
-        assert!(pulse.sources.borrow().len() > 0);
     }
 
     #[test]
