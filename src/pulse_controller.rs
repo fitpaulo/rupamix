@@ -5,10 +5,10 @@ pub mod server_info_wrapper;
 pub mod sink_info;
 pub mod source_info;
 
-use crate::pulse_wrapper::device_manager::{DeviceError, DeviceManager};
-use crate::pulse_wrapper::device_wrapper::Device;
-use crate::pulse_wrapper::pulse_driver::PulseDriver;
-use crate::pulse_wrapper::server_info_wrapper::PulseServerInfo;
+use crate::pulse_controller::device_manager::{DeviceError, DeviceManager};
+use crate::pulse_controller::device_wrapper::Device;
+use crate::pulse_controller::pulse_driver::PulseDriver;
+use crate::pulse_controller::server_info_wrapper::PulseServerInfo;
 
 use pulse::callbacks::ListResult;
 use pulse::volume::ChannelVolumes;
@@ -23,7 +23,20 @@ pub struct Pulse {
 }
 
 impl Pulse {
-    pub fn new() -> Result<Pulse, &'static str> {
+    pub fn new() -> Pulse {
+        let res = Pulse::init();
+        match res {
+            Ok(mut pulse) => {
+                pulse.sync();
+                pulse
+            }
+            Err(e) => {
+                panic!("Error initalizing a new Pulse Controller: {e}");
+            }
+        }
+    }
+
+    fn init() -> Result<Pulse, &'static str> {
         let driver = PulseDriver::connect_to_pulse()?;
 
         Ok(Pulse {
@@ -198,7 +211,7 @@ mod tests {
     static INC: u8 = 5;
 
     fn setup() -> Pulse {
-        Pulse::new().unwrap()
+        Pulse::new()
     }
 
     // everything below here must be run on a single thread
@@ -245,7 +258,6 @@ mod tests {
         // re-init to get the updated system vol
         pulse.update();
         let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
-
         assert_eq!(initial - 5, default.borrow().get_volume_as_pct());
     }
 

@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use rupamix::pulse_wrapper::Pulse;
+use rupamix::pulse_controller::Pulse;
 
 #[derive(Debug, Parser)]
 #[command(name = "Rust Pulse Mixer")]
@@ -72,8 +72,7 @@ enum Commands {
 fn main() -> Result<(), &'static str> {
     let cli = Cli::parse();
 
-    let mut pulse = Pulse::new()?;
-    pulse.sync();
+    let mut pulse = Pulse::new();
 
     match &cli.command {
         Commands::Print {

@@ -1,4 +1,4 @@
-use crate::pulse_wrapper::device_wrapper::Device;
+use crate::pulse_controller::device_wrapper::Device;
 use pulse::context::introspect::SourceInfo;
 use pulse::volume::{ChannelVolumes, Volume};
 use std::cell::RefCell;
