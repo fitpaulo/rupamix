@@ -1,1 +1,1 @@
-pub mod pulse_wrapper;
+pub mod pulse_controller;
