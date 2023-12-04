@@ -19,7 +19,7 @@ use std::rc::Rc;
 pub struct Pulse {
     driver: PulseDriver,
     server_info: Rc<RefCell<PulseServerInfo>>,
-    devices: Rc<RefCell<DeviceManager>>,
+    device_manager: Rc<RefCell<DeviceManager>>,
 }
 
 impl Default for Pulse {
@@ -29,12 +29,15 @@ impl Default for Pulse {
         Pulse {
             driver,
             server_info: Rc::new(RefCell::new(PulseServerInfo::default())),
-            devices: Rc::new(RefCell::new(DeviceManager::default())),
+            device_manager: Rc::new(RefCell::new(DeviceManager::default())),
         }
     }
 }
 
 impl Pulse {
+    /// This gets a fully ready to use Pulse struct. To achieve that we
+    /// created a default with empty server_info and device fields.
+    /// To fill those empty fields we call sync to get the current global state of PulseAudio
     pub fn new() -> Pulse {
         let mut pulse = Pulse::default();
 
@@ -42,6 +45,8 @@ impl Pulse {
         pulse
     }
 
+    /// Get the current state of Pulse Audio
+    /// This includes info about the server, the sinks, and the sources
     pub fn sync(&mut self) {
         self.get_server_info();
         // Currently we throw away these Results
@@ -52,29 +57,40 @@ impl Pulse {
         }
     }
 
-    /// Sync is not idempotent so we need to reset it's fields
+    /// Our access to Pulse state is a oneshot, if the state changes, or if we tried to change it,
+    /// we need to ask Pulse for the world state again.
+    /// Sync is not idempotent so we need to reset the fields set by sync
     /// before we call sync on it again.
     pub fn update(&mut self) {
-        self.devices.borrow_mut().reset();
+        self.device_manager.borrow_mut().reset();
         self.sync();
     }
 
+    /// This calls the device managers print soruces
     pub fn print_sources(&self) {
-        self.devices.borrow_mut().print_sources();
+        self.device_manager.borrow_mut().print_sources();
     }
 
+    /// This calls the device managers print sinks
     pub fn print_sinks(&self) {
-        self.devices.borrow_mut().print_sinks();
+        self.device_manager.borrow_mut().print_sinks();
     }
 
+    /// Here we want to prink the volume of a specific sink.
+    /// Sinks can be specified with either an index or a name.
+    /// If neither are supplied, we will print the info from the default
     pub fn print_sink_volume(
         &self,
         index: Option<u32>,
         name: Option<String>,
     ) -> Result<(), DeviceError> {
-        self.devices.borrow_mut().print_sink_volume(index, name)
+        self.device_manager
+            .borrow_mut()
+            .print_sink_volume(index, name)
     }
 
+    /// This method asks the running Pulse server for it's sever info and
+    /// stores that data in our thin wrapper around pulse audio's state
     fn get_server_info(&mut self) {
         let server_info = self.server_info.clone();
 
@@ -89,8 +105,9 @@ impl Pulse {
             .expect("Wait for op exited prematurely");
     }
 
+    /// Get a list of all pulse audio's sources and store those in our device manager
     fn get_source_info(&mut self) -> Result<(), DeviceError> {
-        let manager = self.devices.clone();
+        let manager = self.device_manager.clone();
 
         let op =
             self.driver
@@ -108,13 +125,14 @@ impl Pulse {
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
 
-        self.devices
+        self.device_manager
             .borrow_mut()
             .set_default_source(&self.server_info.borrow().default_source_name)
     }
 
+    /// Get a list of all pulse audio's sinks and store those in our device manager
     fn get_sink_info(&mut self) -> Result<(), DeviceError> {
-        let manager = self.devices.clone();
+        let manager = self.device_manager.clone();
 
         let op = self
             .driver
@@ -132,11 +150,14 @@ impl Pulse {
             .wait_for_op(op)
             .expect("Wait for op exited prematurely");
 
-        self.devices
+        self.device_manager
             .borrow_mut()
             .set_default_sink(&self.server_info.borrow().default_sink_name)
     }
 
+    /// Updates the volume of a particular sink by that sink's index
+    /// This method is what actually reaches out to the running server to request
+    /// the change in volume
     fn update_sink_volume(&mut self, index: u32, volume: ChannelVolumes) {
         let op = self
             .driver
@@ -149,6 +170,10 @@ impl Pulse {
             .expect("Wait for op exited prematurely");
     }
 
+    /// This method first get the sink by index or name (default if neither are supplied)
+    /// It then asks the sink to increase it's volume. This is just a state change in our
+    /// representation of the sink, so finally it uses that new rep to call our method that
+    /// will interface with the PA server to make the change for real
     pub fn increase_sink_volume(
         &mut self,
         inc: &u8,
@@ -156,7 +181,12 @@ impl Pulse {
         idx: Option<u32>,
         boost: bool,
     ) -> Result<(), &'static str> {
-        let sink = self.devices.borrow_mut().get_sink(idx, name).ok().unwrap();
+        let sink = self
+            .device_manager
+            .borrow_mut()
+            .get_sink(idx, name)
+            .ok()
+            .unwrap();
 
         sink.borrow_mut().increase_volume(inc, boost);
 
@@ -167,13 +197,22 @@ impl Pulse {
         Ok(())
     }
 
+    /// This method first get the sink by index or name (default if neither are supplied)
+    /// It then asks the sink to decrease it's volume. This is just a state change in our
+    /// representation of the sink, so finally it uses that new rep to call our method that
+    /// will interface with the PA server to make the change for real
     pub fn decrease_sink_volume(
         &mut self,
         inc: &u8,
         name: Option<String>,
         idx: Option<u32>,
     ) -> Result<(), &'static str> {
-        let sink = self.devices.borrow_mut().get_sink(idx, name).ok().unwrap();
+        let sink = self
+            .device_manager
+            .borrow_mut()
+            .get_sink(idx, name)
+            .ok()
+            .unwrap();
 
         sink.borrow_mut().decrease_volume(inc);
 
@@ -184,12 +223,21 @@ impl Pulse {
         Ok(())
     }
 
+    /// This method first get the sink by index or name (default if neither are supplied)
+    /// It then asks the sink to toggle_mute. This is just a state change in our
+    /// representation of the sink, so finally it uses that new rep to call our method that
+    /// will interface with the PA server to make the change for real
     pub fn toggle_mute(
         &mut self,
         name: Option<String>,
         idx: Option<u32>,
     ) -> Result<(), &'static str> {
-        let sink = self.devices.borrow_mut().get_sink(idx, name).ok().unwrap();
+        let sink = self
+            .device_manager
+            .borrow_mut()
+            .get_sink(idx, name)
+            .ok()
+            .unwrap();
 
         sink.borrow_mut()
             .toggle_mute()
@@ -227,7 +275,12 @@ mod tests {
         pulse.sync();
 
         // We are taking our sink here, we need to re-init it later
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
 
         let initial = default.borrow().get_volume_as_pct();
 
@@ -235,7 +288,12 @@ mod tests {
 
         // re-init so we can get the sync and compare values
         pulse.update();
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
 
         assert_eq!(initial + 5, default.borrow().get_volume_as_pct());
     }
@@ -247,7 +305,12 @@ mod tests {
         let mut pulse = setup();
         pulse.sync();
 
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
 
         let initial = default.borrow().get_volume_as_pct();
 
@@ -256,7 +319,12 @@ mod tests {
 
         // re-init to get the updated system vol
         pulse.update();
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
         assert_eq!(initial - 5, default.borrow().get_volume_as_pct());
     }
 
@@ -266,7 +334,12 @@ mod tests {
         let mut pulse = setup();
         pulse.sync();
 
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
 
         let initial = default.borrow().get_volume_as_pct();
 
@@ -274,7 +347,12 @@ mod tests {
         pulse.toggle_mute(None, None).unwrap();
 
         pulse.update();
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
         let muted = default.borrow().get_volume_as_pct();
 
         assert_eq!(muted, 0);
@@ -283,7 +361,12 @@ mod tests {
         pulse.toggle_mute(None, None).unwrap();
 
         pulse.update();
-        let default = pulse.devices.borrow_mut().get_default_sink().ok().unwrap();
+        let default = pulse
+            .device_manager
+            .borrow_mut()
+            .get_default_sink()
+            .ok()
+            .unwrap();
 
         assert_eq!(initial, default.borrow().get_volume_as_pct());
     }
