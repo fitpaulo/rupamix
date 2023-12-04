@@ -7,24 +7,24 @@ for increasing, decreasing, and muting the default sink (speakers).
 ## Install
 ### Use Cargo
 
-    cargo install rupamix
+    cargo install rupamix --profile optimized
 
-### Download the repo
+### Manual
 
     git clone git@github.com:fitpaulo/rupamix.git \
     && cd rupamix \
-    && cargo build
+    && cargo build --profile optimized
     
 ### Make it visible to your WM/Desktop
 To use it with your window manger, i.e. bind it to a keyboard press, your window manager needs to see the binary.
 The easiest way is to copy the execsuteale into /usr/bin
 
-    sudo cp /path/to/executeable /usr/bin/.
+    sudo cp /path/to/executeable /usr/bin/
 
 Or you can link it:
 
-    sudo ln -sf /path/to/executable /usr/bin/.
-## Example Usage For Defualt Sink
+    sudo ln -sf /path/to/executable /usr/bin/
+## Usage examples
 To increase the audio by the defualt 5:
     
     rupamix i
