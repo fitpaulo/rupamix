@@ -22,28 +22,24 @@ pub struct Pulse {
     devices: Rc<RefCell<DeviceManager>>,
 }
 
-impl Pulse {
-    pub fn new() -> Pulse {
-        let res = Pulse::init();
-        match res {
-            Ok(mut pulse) => {
-                pulse.sync();
-                pulse
-            }
-            Err(e) => {
-                panic!("Error initalizing a new Pulse Controller: {e}");
-            }
-        }
-    }
+impl Default for Pulse {
+    fn default() -> Self {
+        let driver = PulseDriver::connect_to_pulse().unwrap();
 
-    fn init() -> Result<Pulse, &'static str> {
-        let driver = PulseDriver::connect_to_pulse()?;
-
-        Ok(Pulse {
+        Pulse {
             driver,
             server_info: Rc::new(RefCell::new(PulseServerInfo::default())),
             devices: Rc::new(RefCell::new(DeviceManager::default())),
-        })
+        }
+    }
+}
+
+impl Pulse {
+    pub fn new() -> Pulse {
+        let mut pulse = Pulse::default();
+
+        pulse.sync();
+        pulse
     }
 
     pub fn sync(&mut self) {
