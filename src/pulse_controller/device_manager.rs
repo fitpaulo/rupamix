@@ -17,6 +17,29 @@ pub enum DeviceError {
     NoSinks(String),
 }
 
+impl DeviceError {
+    pub fn print_err_and_panic(&self) {
+        match self {
+            DeviceError::NameNotFound(e) => {
+                eprintln!("Device NameNotFound Error: {e}");
+                panic!("Unable to continue.")
+            }
+            DeviceError::IndexNotFound(e) => {
+                eprintln!("Device IndexNotFound Error: {e}");
+                panic!("Unable to continue.")
+            }
+            DeviceError::DefaultNotFound(e) => {
+                eprintln!("Device DefaultNotFound Error: {e}");
+                panic!("Unable to continue.")
+            }
+            DeviceError::NoSinks(e) => {
+                eprintln!("Device NoSinks Error: {e}");
+                panic!("Unable to continue.")
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct DeviceManager {
     sources: Vec<Source>,

@@ -45,8 +45,11 @@ impl Pulse {
     pub fn sync(&mut self) {
         self.get_server_info();
         // Currently we throw away these Results
-        let _ = self.get_source_info();
-        let _ = self.get_sink_info();
+        if let Err(res) = self.get_source_info() {
+            res.print_err_and_panic()
+        } else if let Err(res) = self.get_sink_info() {
+            res.print_err_and_panic()
+        }
     }
 
     /// Sync is not idempotent so we need to reset it's fields
