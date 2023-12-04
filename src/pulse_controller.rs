@@ -272,7 +272,6 @@ mod tests {
     // This requires volume to be 95 or less, otherwise it will fail
     fn checks_increase_vol_increases_vol() {
         let mut pulse = setup();
-        pulse.sync();
 
         // We are taking our sink here, we need to re-init it later
         let default = pulse
@@ -303,7 +302,6 @@ mod tests {
     // This requires volume to be 5 or greater, otherwise it will fail
     fn checks_decrease_vol_decreases_vol() {
         let mut pulse = setup();
-        pulse.sync();
 
         let default = pulse
             .device_manager
@@ -332,7 +330,6 @@ mod tests {
     #[ignore]
     fn checks_toggle_mute_works() {
         let mut pulse = setup();
-        pulse.sync();
 
         let default = pulse
             .device_manager
