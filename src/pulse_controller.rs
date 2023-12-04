@@ -277,7 +277,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
 
@@ -290,7 +290,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
 
@@ -306,7 +306,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
 
@@ -320,7 +320,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
         assert_eq!(initial - 5, default.borrow().get_volume_as_pct());
@@ -334,7 +334,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
 
@@ -347,7 +347,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
         let muted = default.borrow().get_volume_as_pct();
@@ -361,7 +361,7 @@ mod tests {
         let default = pulse
             .device_manager
             .borrow_mut()
-            .get_default_sink()
+            .default_sink()
             .ok()
             .unwrap();
 
