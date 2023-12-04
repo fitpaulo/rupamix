@@ -239,6 +239,13 @@ impl DeviceManager {
         Ok(())
     }
 
+    /// This will print to the comand line the sources in the following format
+    ///            index :: name
+    /// --------------------------------
+    ///                1 :: SourceA
+    ///      (default) 2 :: SourceB
+    /// ...
+    ///                N :: SourceM
     pub fn print_sources(&mut self) -> Result<(), DeviceError> {
         let mut len_idx = 0;
         let mut len_name = 0;
@@ -279,6 +286,13 @@ impl DeviceManager {
         Ok(())
     }
 
+    /// This will print to the comand line the sinks in the following format
+    ///            index :: name
+    /// --------------------------------
+    ///                1 :: SinkA
+    ///      (default) 2 :: SinkB
+    /// ...
+    ///                N :: SinkM
     pub fn print_sinks(&mut self) -> Result<(), DeviceError> {
         let mut len_idx = 0;
         let mut len_name = 0;
