@@ -68,25 +68,29 @@ impl Pulse {
 
     /// This calls the device managers print soruces
     pub fn print_sources(&self) {
-        self.device_manager.borrow_mut().print_sources();
+        if let Err(e) = self.device_manager.borrow_mut().print_sources() {
+            e.print_err_and_panic();
+        }
     }
 
     /// This calls the device managers print sinks
     pub fn print_sinks(&self) {
-        self.device_manager.borrow_mut().print_sinks();
+        if let Err(e) = self.device_manager.borrow_mut().print_sinks() {
+            e.print_err_and_panic();
+        }
     }
 
     /// Here we want to prink the volume of a specific sink.
     /// Sinks can be specified with either an index or a name.
     /// If neither are supplied, we will print the info from the default
-    pub fn print_sink_volume(
-        &self,
-        index: Option<u32>,
-        name: Option<String>,
-    ) -> Result<(), DeviceError> {
-        self.device_manager
+    pub fn print_sink_volume(&self, index: Option<u32>, name: Option<String>) {
+        if let Err(e) = self
+            .device_manager
             .borrow_mut()
             .print_sink_volume(index, name)
+        {
+            e.print_err_and_panic()
+        }
     }
 
     /// This method asks the running Pulse server for it's sever info and
@@ -180,13 +184,16 @@ impl Pulse {
         name: Option<String>,
         idx: Option<u32>,
         boost: bool,
-    ) -> Result<(), &'static str> {
-        let sink = self
-            .device_manager
-            .borrow_mut()
-            .get_sink(idx, name)
-            .ok()
-            .unwrap();
+    ) {
+        let mut sink: Option<Rc<RefCell<sink_info::PulseSinkInfo>>> = None;
+        let res = self.device_manager.borrow_mut().get_sink(idx, name);
+
+        match res {
+            Ok(inner) => sink = Some(inner),
+            Err(e) => e.print_err_and_panic(),
+        }
+
+        let sink = sink.unwrap();
 
         sink.borrow_mut().increase_volume(inc, boost);
 
@@ -194,25 +201,22 @@ impl Pulse {
         let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume.take());
-        Ok(())
     }
 
     /// This method first get the sink by index or name (default if neither are supplied)
     /// It then asks the sink to decrease it's volume. This is just a state change in our
     /// representation of the sink, so finally it uses that new rep to call our method that
     /// will interface with the PA server to make the change for real
-    pub fn decrease_sink_volume(
-        &mut self,
-        inc: &u8,
-        name: Option<String>,
-        idx: Option<u32>,
-    ) -> Result<(), &'static str> {
-        let sink = self
-            .device_manager
-            .borrow_mut()
-            .get_sink(idx, name)
-            .ok()
-            .unwrap();
+    pub fn decrease_sink_volume(&mut self, inc: &u8, name: Option<String>, idx: Option<u32>) {
+        let mut sink: Option<Rc<RefCell<sink_info::PulseSinkInfo>>> = None;
+        let res = self.device_manager.borrow_mut().get_sink(idx, name);
+
+        match res {
+            Ok(inner) => sink = Some(inner),
+            Err(e) => e.print_err_and_panic(),
+        }
+
+        let sink = sink.unwrap();
 
         sink.borrow_mut().decrease_volume(inc);
 
@@ -220,24 +224,22 @@ impl Pulse {
         let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume.take());
-        Ok(())
     }
 
     /// This method first get the sink by index or name (default if neither are supplied)
     /// It then asks the sink to toggle_mute. This is just a state change in our
     /// representation of the sink, so finally it uses that new rep to call our method that
     /// will interface with the PA server to make the change for real
-    pub fn toggle_mute(
-        &mut self,
-        name: Option<String>,
-        idx: Option<u32>,
-    ) -> Result<(), &'static str> {
-        let sink = self
-            .device_manager
-            .borrow_mut()
-            .get_sink(idx, name)
-            .ok()
-            .unwrap();
+    pub fn toggle_mute(&mut self, name: Option<String>, idx: Option<u32>) {
+        let mut sink: Option<Rc<RefCell<sink_info::PulseSinkInfo>>> = None;
+        let res = self.device_manager.borrow_mut().get_sink(idx, name);
+
+        match res {
+            Ok(inner) => sink = Some(inner),
+            Err(e) => e.print_err_and_panic(),
+        }
+
+        let sink = sink.unwrap();
 
         sink.borrow_mut()
             .toggle_mute()
@@ -247,7 +249,6 @@ impl Pulse {
         let volume = sink.borrow().volume();
 
         self.update_sink_volume(index, volume.take());
-        Ok(())
     }
 }
 
@@ -283,7 +284,7 @@ mod tests {
 
         let initial = default.borrow().get_volume_as_pct();
 
-        let _ = pulse.increase_sink_volume(&INC, None, None, BOOST);
+        pulse.increase_sink_volume(&INC, None, None, BOOST);
 
         // re-init so we can get the sync and compare values
         pulse.update();
@@ -313,7 +314,7 @@ mod tests {
         let initial = default.borrow().get_volume_as_pct();
 
         //Re-init so that decrease can get the sink
-        pulse.decrease_sink_volume(&5, None, None).unwrap();
+        pulse.decrease_sink_volume(&5, None, None);
 
         // re-init to get the updated system vol
         pulse.update();
@@ -341,7 +342,7 @@ mod tests {
         let initial = default.borrow().get_volume_as_pct();
 
         // Defualt took the sink, re-init
-        pulse.toggle_mute(None, None).unwrap();
+        pulse.toggle_mute(None, None);
 
         pulse.update();
         let default = pulse
@@ -355,7 +356,7 @@ mod tests {
         assert_eq!(muted, 0);
 
         // Re-pop sink list
-        pulse.toggle_mute(None, None).unwrap();
+        pulse.toggle_mute(None, None);
 
         pulse.update();
         let default = pulse

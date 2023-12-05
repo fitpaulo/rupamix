@@ -81,24 +81,24 @@ fn main() -> Result<(), &'static str> {
             volume,
         } => {
             if *sources {
-                pulse.print_sources();
+                pulse.print_sources()
             }
 
             if *sinks {
-                pulse.print_sinks();
+                pulse.print_sinks()
             }
 
             if *volume {
-                let _ = pulse.print_sink_volume(cli.idx, cli.name);
+                pulse.print_sink_volume(cli.idx, cli.name);
             }
         }
         Commands::IncreaseVolume { inc, boost } => {
-            pulse.increase_sink_volume(inc, cli.name, cli.idx, *boost)?;
+            pulse.increase_sink_volume(inc, cli.name, cli.idx, *boost);
         }
         Commands::DecreaseVolume { inc } => {
-            pulse.decrease_sink_volume(inc, cli.name, cli.idx)?;
+            pulse.decrease_sink_volume(inc, cli.name, cli.idx);
         }
-        Commands::ToggleMute => pulse.toggle_mute(cli.name, cli.idx)?,
+        Commands::ToggleMute => pulse.toggle_mute(cli.name, cli.idx),
     }
     Ok(())
 }
