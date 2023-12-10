@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
 use rupamix::pulse_controller::Pulse;
 
+#[cfg(feature = "extractor")]
+use rupamix::info_xtractor::InfoXtractor;
+
 #[derive(Debug, Parser)]
 #[command(name = "Rust Pulse Mixer")]
 #[command(author = "Paulo Guimaraes <paulotechusa@proton.me>")]
@@ -67,6 +70,19 @@ enum Commands {
         #[arg(help = "Prints the volume of the specifed sink or the default if not specified")]
         volume: bool,
     },
+
+    #[command(visible_alias = "x")]
+    #[command(
+        about = "Gets system info about volumes, really only useful if you are developing this tool"
+    )]
+    #[cfg(feature = "extractor")]
+    Extractor {
+        #[arg(short)]
+        #[arg(
+            help = "Prints a functional approximation of one pct for both dB and Linear Volume structs"
+        )]
+        one_percent: bool,
+    },
 }
 
 fn main() -> Result<(), &'static str> {
@@ -99,6 +115,15 @@ fn main() -> Result<(), &'static str> {
             pulse.decrease_sink_volume(inc, cli.name, cli.idx);
         }
         Commands::ToggleMute => pulse.toggle_mute(cli.name, cli.idx),
+        #[cfg(feature = "extractor")]
+        Commands::Extractor { one_percent } => {
+            if *one_percent {
+                let xtractor = InfoXtractor::new(cli.verbose);
+                // xtractor.test_one_pct_midpoint(cli.verbose);
+                // xtractor.test_one_pct_largest(cli.verbose);
+                xtractor.test_one_pct_better();
+            }
+        }
     }
     Ok(())
 }

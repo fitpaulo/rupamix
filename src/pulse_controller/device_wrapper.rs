@@ -55,7 +55,7 @@ pub trait Device<T> {
         println!("The current volume is: {}", vol.print());
     }
 
-    // Made this  for testing pulse_controller
+    // Made this for testing pulse_controller
     fn get_volume_as_pct(&self) -> u8 {
         let vol_str = self.volume().borrow_mut().get()[0].print();
         for part in vol_str.split('%') {

@@ -45,6 +45,16 @@ impl Pulse {
         pulse
     }
 
+    /// Return the device manager to a calling controller
+    pub fn device_manager(&self) -> Rc<RefCell<DeviceManager>> {
+        self.device_manager.clone()
+    }
+
+    /// Return the server info to a calling controller
+    pub fn server_info(&self) -> Rc<RefCell<PulseServerInfo>> {
+        self.server_info.clone()
+    }
+
     /// Get the current state of Pulse Audio
     /// This includes info about the server, the sinks, and the sources
     pub fn sync(&mut self) {
