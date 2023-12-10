@@ -1,14 +1,10 @@
-pub mod device;
 pub mod device_manager;
 pub mod pulse_driver;
-pub mod server_info;
-pub mod sink_info;
-pub mod source_info;
 
-use crate::pulse_controller::device::Device;
 use crate::pulse_controller::device_manager::{DeviceError, DeviceManager};
 use crate::pulse_controller::pulse_driver::PulseDriver;
-use crate::pulse_controller::server_info::PulseServerInfo;
+use crate::pulse_wrappers::device::Device;
+use crate::pulse_wrappers::server_info::PulseServerInfo;
 
 use pulse::callbacks::ListResult;
 use pulse::volume::ChannelVolumes;
