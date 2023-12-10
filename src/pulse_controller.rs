@@ -3,8 +3,10 @@ pub mod pulse_driver;
 
 use crate::pulse_controller::device_manager::{DeviceError, DeviceManager};
 use crate::pulse_controller::pulse_driver::PulseDriver;
+
 use crate::pulse_wrappers::device::Device;
 use crate::pulse_wrappers::server_info::PulseServerInfo;
+use crate::pulse_wrappers::sink_info::PulseSinkInfo;
 
 use pulse::callbacks::ListResult;
 use pulse::volume::ChannelVolumes;
@@ -191,7 +193,7 @@ impl Pulse {
         idx: Option<u32>,
         boost: bool,
     ) {
-        let mut sink: Option<Rc<RefCell<sink_info::PulseSinkInfo>>> = None;
+        let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
         let res = self.device_manager.borrow_mut().get_sink(idx, name);
 
         match res {
@@ -214,7 +216,7 @@ impl Pulse {
     /// representation of the sink, so finally it uses that new rep to call our method that
     /// will interface with the PA server to make the change for real
     pub fn decrease_sink_volume(&mut self, inc: &u8, name: Option<String>, idx: Option<u32>) {
-        let mut sink: Option<Rc<RefCell<sink_info::PulseSinkInfo>>> = None;
+        let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
         let res = self.device_manager.borrow_mut().get_sink(idx, name);
 
         match res {
@@ -237,7 +239,7 @@ impl Pulse {
     /// representation of the sink, so finally it uses that new rep to call our method that
     /// will interface with the PA server to make the change for real
     pub fn toggle_mute(&mut self, name: Option<String>, idx: Option<u32>) {
-        let mut sink: Option<Rc<RefCell<sink_info::PulseSinkInfo>>> = None;
+        let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
         let res = self.device_manager.borrow_mut().get_sink(idx, name);
 
         match res {
