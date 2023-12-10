@@ -1,8 +1,8 @@
 use pulse::context::introspect::{SinkInfo, SourceInfo};
 
-use crate::pulse_controller::device_wrapper::Device;
 use crate::pulse_controller::sink_info::PulseSinkInfo;
 use crate::pulse_controller::source_info::PulseSourceInfo;
+use crate::pulse_controller::Device;
 
 use std::cell::RefCell;
 use std::rc::Rc;
