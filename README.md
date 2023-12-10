@@ -17,13 +17,13 @@ for increasing, decreasing, and muting the default sink (speakers).
     
 ### Make it visible to your WM/Desktop
 To use it with your window manger, i.e. bind it to a keyboard press, your window manager needs to see the binary.
-The easiest way is to copy the execsuteale into /usr/bin
+The easiest way is to copy the execsuteale into /usr/bin (this assumes you installed with cargo)
 
-    sudo cp /path/to/executeable /usr/bin/
+    sudo cp $HOME/.cargo/bin/rupamix /usr/bin/.
 
 Or you can link it:
 
-    sudo ln -sf /path/to/executable /usr/bin/
+    sudo ln -sf $HOME/.cargo/bin/rupamix /usr/bin/.
 ## Usage examples
 To increase the audio by the defualt 5:
     
