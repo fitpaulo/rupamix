@@ -33,7 +33,7 @@ To increase the audio by N:
     
     rupamix increase --increment <N>
 
-To decrease the audio py the defualt 5:
+To decrease the audio by the defualt 5:
     
     rupamix decrease
     
@@ -67,6 +67,6 @@ OR
 ## Toggle Mute
 It can toggle mute as well: 
     
-    rupamix t
+    rupamix toggle-mute
 
 
