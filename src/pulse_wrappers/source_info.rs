@@ -66,6 +66,8 @@ impl Device<PulseSourceInfo> for PulseSourceInfo {
 
 #[cfg(test)]
 mod tests {
+    use crate::pulse_wrappers::device::{MAX_VOLUME, MAX_VOLUME_BOOSTED};
+
     use super::*;
     use pulse::volume::VolumeDB;
     static APPRROX_54_PCT: VolumeDB = VolumeDB(-16.01);
@@ -169,7 +171,7 @@ mod tests {
         let mut source = setup();
         source.increase_volume(&46, false);
 
-        assert_eq!(100, source.get_volume_as_pct());
+        assert_eq!(MAX_VOLUME, source.get_volume_as_pct());
     }
 
     #[test]
@@ -186,7 +188,7 @@ mod tests {
         let mut source = setup();
         source.increase_volume(&56, false);
 
-        assert_eq!(100, source.get_volume_as_pct());
+        assert_eq!(MAX_VOLUME, source.get_volume_as_pct());
     }
 
     #[test]
@@ -212,7 +214,7 @@ mod tests {
         let mut source = setup();
         source.increase_volume(&66, true);
 
-        assert_eq!(120, source.get_volume_as_pct());
+        assert_eq!(MAX_VOLUME_BOOSTED, source.get_volume_as_pct());
     }
 
     // Lets overflow it!
@@ -221,6 +223,52 @@ mod tests {
         let mut source = setup();
         source.increase_volume(&255, true);
 
-        assert_eq!(120, source.get_volume_as_pct());
+        assert_eq!(MAX_VOLUME_BOOSTED, source.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_increase() {
+        let mut source = setup();
+        let vol = 65;
+        let boost = false;
+
+        source.set_volume(vol, boost);
+
+        assert_eq!(vol, source.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_increase_mega() {
+        let mut source = setup();
+        let vol = 150;
+        let boost = false;
+
+        source.set_volume(vol, boost);
+
+        // 100 is max without boost
+        assert_eq!(MAX_VOLUME, source.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_increase_mega_boost() {
+        let mut source = setup();
+        let vol = 150;
+        let boost = false;
+
+        source.set_volume(vol, boost);
+
+        // 100 is max without boost
+        assert_eq!(MAX_VOLUME, source.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_decrease() {
+        let mut source = setup();
+        let vol = 20;
+        let boost = false;
+
+        source.set_volume(vol, boost);
+
+        assert_eq!(vol, source.get_volume_as_pct());
     }
 }

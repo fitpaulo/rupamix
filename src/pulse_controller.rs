@@ -182,6 +182,28 @@ impl Pulse {
             .expect("Wait for op exited prematurely");
     }
 
+    pub fn set_sink_volume(
+        &mut self,
+        vol: u8,
+        boost: bool,
+        index: Option<u32>,
+        name: Option<String>,
+    ) {
+        let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
+        let res = self.device_manager.borrow_mut().get_sink(index, name);
+
+        match res {
+            Ok(inner) => sink = Some(inner),
+            Err(e) => e.print_err_and_panic(),
+        }
+
+        let sink = sink.unwrap();
+
+        sink.borrow_mut().set_volume(vol, boost);
+
+        self.update_sink_volume(sink.borrow().index(), sink.borrow().volume().take());
+    }
+
     /// This method first get the sink by index or name (default if neither are supplied)
     /// It then asks the sink to increase it's volume. This is just a state change in our
     /// representation of the sink, so finally it uses that new rep to call our method that
@@ -189,12 +211,12 @@ impl Pulse {
     pub fn increase_sink_volume(
         &mut self,
         inc: &u8,
+        index: Option<u32>,
         name: Option<String>,
-        idx: Option<u32>,
         boost: bool,
     ) {
         let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
-        let res = self.device_manager.borrow_mut().get_sink(idx, name);
+        let res = self.device_manager.borrow_mut().get_sink(index, name);
 
         match res {
             Ok(inner) => sink = Some(inner),
@@ -205,19 +227,16 @@ impl Pulse {
 
         sink.borrow_mut().increase_volume(inc, boost);
 
-        let index = sink.borrow().index();
-        let volume = sink.borrow().volume();
-
-        self.update_sink_volume(index, volume.take());
+        self.update_sink_volume(sink.borrow().index(), sink.borrow().volume().take());
     }
 
     /// This method first get the sink by index or name (default if neither are supplied)
     /// It then asks the sink to decrease it's volume. This is just a state change in our
     /// representation of the sink, so finally it uses that new rep to call our method that
     /// will interface with the PA server to make the change for real
-    pub fn decrease_sink_volume(&mut self, inc: &u8, name: Option<String>, idx: Option<u32>) {
+    pub fn decrease_sink_volume(&mut self, inc: &u8, index: Option<u32>, name: Option<String>) {
         let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
-        let res = self.device_manager.borrow_mut().get_sink(idx, name);
+        let res = self.device_manager.borrow_mut().get_sink(index, name);
 
         match res {
             Ok(inner) => sink = Some(inner),
@@ -228,19 +247,16 @@ impl Pulse {
 
         sink.borrow_mut().decrease_volume(inc);
 
-        let index = sink.borrow().index();
-        let volume = sink.borrow().volume();
-
-        self.update_sink_volume(index, volume.take());
+        self.update_sink_volume(sink.borrow().index(), sink.borrow().volume().take());
     }
 
     /// This method first get the sink by index or name (default if neither are supplied)
     /// It then asks the sink to toggle_mute. This is just a state change in our
     /// representation of the sink, so finally it uses that new rep to call our method that
     /// will interface with the PA server to make the change for real
-    pub fn toggle_mute(&mut self, name: Option<String>, idx: Option<u32>) {
+    pub fn toggle_mute(&mut self, index: Option<u32>, name: Option<String>) {
         let mut sink: Option<Rc<RefCell<PulseSinkInfo>>> = None;
-        let res = self.device_manager.borrow_mut().get_sink(idx, name);
+        let res = self.device_manager.borrow_mut().get_sink(index, name);
 
         match res {
             Ok(inner) => sink = Some(inner),
@@ -253,10 +269,7 @@ impl Pulse {
             .toggle_mute()
             .expect("Unable to toggle mute");
 
-        let index = sink.borrow().index();
-        let volume = sink.borrow().volume();
-
-        self.update_sink_volume(index, volume.take());
+        self.update_sink_volume(sink.borrow().index(), sink.borrow().volume().take());
     }
 }
 
@@ -268,6 +281,15 @@ mod tests {
 
     fn setup() -> Pulse {
         Pulse::new()
+    }
+
+    fn get_default(pulse: &Pulse) -> Rc<RefCell<PulseSinkInfo>> {
+        pulse
+            .device_manager
+            .borrow_mut()
+            .default_sink()
+            .ok()
+            .unwrap()
     }
 
     // everything below here must be run on a single thread
@@ -283,12 +305,7 @@ mod tests {
         let mut pulse = setup();
 
         // We are taking our sink here, we need to re-init it later
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
 
         let initial = default.borrow().get_volume_as_pct();
 
@@ -296,12 +313,7 @@ mod tests {
 
         // re-init so we can get the sync and compare values
         pulse.update();
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
 
         assert_eq!(initial + 5, default.borrow().get_volume_as_pct());
     }
@@ -312,12 +324,7 @@ mod tests {
     fn checks_decrease_vol_decreases_vol() {
         let mut pulse = setup();
 
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
 
         let initial = default.borrow().get_volume_as_pct();
 
@@ -326,12 +333,8 @@ mod tests {
 
         // re-init to get the updated system vol
         pulse.update();
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
+
         assert_eq!(initial - 5, default.borrow().get_volume_as_pct());
     }
 
@@ -340,12 +343,7 @@ mod tests {
     fn checks_toggle_mute_works() {
         let mut pulse = setup();
 
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
 
         let initial = default.borrow().get_volume_as_pct();
 
@@ -353,12 +351,8 @@ mod tests {
         pulse.toggle_mute(None, None);
 
         pulse.update();
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
+
         let muted = default.borrow().get_volume_as_pct();
 
         assert_eq!(muted, 0);
@@ -367,12 +361,67 @@ mod tests {
         pulse.toggle_mute(None, None);
 
         pulse.update();
-        let default = pulse
-            .device_manager
-            .borrow_mut()
-            .default_sink()
-            .ok()
-            .unwrap();
+        let default = get_default(&pulse);
+
+        assert_eq!(initial, default.borrow().get_volume_as_pct());
+    }
+
+    #[test]
+    #[ignore]
+    fn checks_set_volume_works() {
+        let mut pulse = setup();
+
+        let default = get_default(&pulse);
+        let vol = 100;
+        let boost = false;
+
+        let initial = default.borrow().get_volume_as_pct();
+
+        // Defualt took the sink, re-init
+        pulse.set_sink_volume(vol, boost, None, None);
+
+        pulse.update();
+        let default = get_default(&pulse);
+
+        let new_vol = default.borrow().get_volume_as_pct();
+
+        assert_eq!(vol, new_vol);
+
+        // Re-pop sink list
+        pulse.set_sink_volume(initial, boost, None, None);
+
+        pulse.update();
+        let default = get_default(&pulse);
+
+        assert_eq!(initial, default.borrow().get_volume_as_pct());
+    }
+
+    #[test]
+    #[ignore]
+    fn checks_set_volume_works_boosted() {
+        let mut pulse = setup();
+
+        let default = get_default(&pulse);
+        let vol = 120;
+        let boost = true;
+
+        let initial = default.borrow().get_volume_as_pct();
+
+        // Defualt took the sink, re-init
+        pulse.set_sink_volume(vol, boost, None, None);
+
+        pulse.update();
+        let default = get_default(&pulse);
+
+        let new_vol = default.borrow().get_volume_as_pct();
+
+        assert_eq!(vol, new_vol);
+
+        // Re-pop sink list
+        pulse.set_sink_volume(initial, boost, None, None);
+
+        pulse.update();
+        let default = get_default(&pulse);
 
         assert_eq!(initial, default.borrow().get_volume_as_pct());
     }
