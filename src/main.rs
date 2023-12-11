@@ -30,7 +30,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    #[command(visible_aliases = ["inc", "i"])]
+    #[command(visible_aliases = ["increase", "inc", "i"])]
     IncreaseVolume {
         #[arg(short, long = "increment")]
         #[arg(default_value = "5")]
@@ -42,7 +42,7 @@ enum Commands {
         boost: bool,
     },
 
-    #[command(visible_aliases = ["dec", "d"])]
+    #[command(visible_aliases = ["decrease", "dec", "d"])]
     DecreaseVolume {
         #[arg(short, long = "increment")]
         #[arg(default_value = "5")]
@@ -50,7 +50,7 @@ enum Commands {
         inc: u8,
     },
 
-    #[command(visible_aliases = ["s"])]
+    #[command(visible_aliases = ["set", "s"])]
     SetVolume {
         #[arg(short, long = "volume")]
         #[arg(help = "The value (0-100) to set the volume to")]
@@ -61,7 +61,7 @@ enum Commands {
         boost: bool,
     },
 
-    #[command(visible_alias = "t")]
+    #[command(visible_aliases = ["toggle", "t"])]
     ToggleMute,
 
     #[command(visible_alias = "p")]

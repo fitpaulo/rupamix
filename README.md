@@ -27,24 +27,28 @@ Or you can link it:
 ## Usage examples
 To increase the audio by the defualt 5:
     
-    rupamix i
+    rupamix increase
     
 To increase the audio by N:
     
-    rupamix i --increment N
+    rupamix increase --increment <N>
 
 To decrease the audio py the defualt 5:
     
-    rupamix d
+    rupamix decrease
     
 To decrease the audio by N:
     
-    rupamix d --increment N
+    rupamix decrease --increment <N>
+
+To set the volume directly
+
+    rupamix set --volume 120 --boost 
 
 ## You can specify the sink as well
 To get the list of sink indexes and names:
     
-    rupamix p -v
+    rupamix print --volume
 
             Index -- Name                                             
     --------------------------------------------------------------------
@@ -54,11 +58,11 @@ To get the list of sink indexes and names:
 
 Then update a sink like the following:
 
-    rupamix -i 146 i --increment 10
+    rupamix --index 146 increase --increment 10
 
 OR
 
-    rupamix -n alsa_output.pci-0000_0b_00.4.iec958-stereo i -i 10
+    rupamix --name alsa_output.pci-0000_0b_00.4.iec958-stereo increase --increment 10
 
 ## Toggle Mute
 It can toggle mute as well: 
