@@ -13,15 +13,15 @@ struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
 
-    #[arg(short, long = "index")]
-    #[arg(visible_alias = "idx")]
+    #[arg(short, long)]
+    #[arg(visible_alias = "index")]
     #[arg(help = "The index of the sink; uses default sink if not specified")]
     #[arg(conflicts_with = "name")]
-    idx: Option<u32>,
+    index: Option<u32>,
 
     #[arg(short, long)]
     #[arg(help = "The name of the sink; uses default sink if not specified")]
-    #[arg(conflicts_with = "idx")]
+    #[arg(conflicts_with = "index")]
     name: Option<String>,
 
     #[command(subcommand)]
@@ -32,9 +32,8 @@ struct Cli {
 enum Commands {
     #[command(visible_aliases = ["inc", "i"])]
     IncreaseVolume {
-        #[arg(short)]
+        #[arg(short, long = "increment")]
         #[arg(default_value = "5")]
-        #[arg(long = "increment")]
         #[arg(help = "The value to increase the volume by; uses default if not specified")]
         inc: u8,
 
@@ -45,11 +44,21 @@ enum Commands {
 
     #[command(visible_aliases = ["dec", "d"])]
     DecreaseVolume {
-        #[arg(short)]
+        #[arg(short, long = "increment")]
         #[arg(default_value = "5")]
-        #[arg(long = "increment")]
         #[arg(help = "The value to increase the volume by, if not specified it uses the default")]
         inc: u8,
+    },
+
+    #[command(visible_aliases = ["s"])]
+    SetVolume {
+        #[arg(short, long = "volume")]
+        #[arg(help = "The value (0-100) to set the volume to")]
+        vol: u8,
+
+        #[arg(short, long)]
+        #[arg(help = "Allow volume to go past 100; hard capped at 120 currently")]
+        boost: bool,
     },
 
     #[command(visible_alias = "t")]
@@ -105,16 +114,19 @@ fn main() -> Result<(), &'static str> {
             }
 
             if *volume {
-                pulse.print_sink_volume(cli.idx, cli.name);
+                pulse.print_sink_volume(cli.index, cli.name);
             }
         }
         Commands::IncreaseVolume { inc, boost } => {
-            pulse.increase_sink_volume(inc, cli.name, cli.idx, *boost);
+            pulse.increase_sink_volume(inc, cli.index, cli.name, *boost);
         }
         Commands::DecreaseVolume { inc } => {
-            pulse.decrease_sink_volume(inc, cli.name, cli.idx);
+            pulse.decrease_sink_volume(inc, cli.index, cli.name);
         }
-        Commands::ToggleMute => pulse.toggle_mute(cli.name, cli.idx),
+        Commands::ToggleMute => pulse.toggle_mute(cli.index, cli.name),
+        Commands::SetVolume { vol, boost } => {
+            pulse.set_sink_volume(*vol, *boost, cli.index, cli.name)
+        }
         #[cfg(feature = "extractor")]
         Commands::Extractor { one_percent } => {
             if *one_percent {
