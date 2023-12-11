@@ -1,12 +1,14 @@
 use pulse::volume::{ChannelVolumes, Volume, VolumeDB};
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::fs;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::rc::Rc;
 
-static MAX_VOLUME: u8 = 120;
+pub static MAX_VOLUME: u8 = 100;
+pub static MAX_VOLUME_BOOSTED: u8 = 120;
 static FILE: &str = "/tmp/rupamix_vol";
-static APPROX_ONE_PCT: VolumeDB = VolumeDB(-120.0);
+pub static APPROX_ONE_PCT: VolumeDB = VolumeDB(-120.0);
 
 pub trait Device<T> {
     fn index(&self) -> u32;
@@ -18,19 +20,22 @@ pub trait Device<T> {
     fn increase_volume(&mut self, inc: &u8, boost: bool) {
         let initial = self.get_volume_as_pct();
         let mut current = initial;
-        // We don't saturate here because we only want a number as big as MAX_VOLUME
-        let new_vol = initial.checked_add(*inc).unwrap_or(MAX_VOLUME);
+        // We don't saturate here because we only want a number as big as MAX_VOLUME_BOOSTED
+        let mut new_vol = initial.checked_add(*inc).unwrap_or(MAX_VOLUME_BOOSTED);
+
+        if boost {
+            if new_vol > MAX_VOLUME_BOOSTED {
+                new_vol = MAX_VOLUME_BOOSTED;
+            }
+        } else if new_vol > MAX_VOLUME {
+            new_vol = MAX_VOLUME;
+        }
 
         while current < new_vol {
-            if current >= 100 && !boost {
-                println!("Volume is at {} use --boost flag to go higher", current);
-                break;
-            } else {
-                self.volume()
-                    .borrow_mut()
-                    .increase(Volume::from(APPROX_ONE_PCT));
-                current = self.get_volume_as_pct();
-            }
+            self.volume()
+                .borrow_mut()
+                .increase(Volume::from(APPROX_ONE_PCT));
+            current = self.get_volume_as_pct();
         }
     }
 
@@ -49,10 +54,28 @@ pub trait Device<T> {
         }
     }
 
+    #[allow(clippy::comparison_chain)]
+    fn set_volume(&mut self, vol: u8, boost: bool) {
+        let current_vol = self.get_volume_as_pct();
+
+        match vol.cmp(&current_vol) {
+            Ordering::Less => {
+                let inc = current_vol - vol;
+                self.decrease_volume(&inc);
+            }
+            Ordering::Equal => {
+                println!("\nThe current volume is aleardy {vol}");
+            }
+            Ordering::Greater => {
+                let inc = vol - current_vol;
+                self.increase_volume(&inc, boost);
+            }
+        }
+    }
+
     fn print_volume(&self) {
         let vol = self.volume().borrow_mut().get()[0];
-        println!();
-        println!("The current volume is: {}", vol.print());
+        println!("\nThe current volume is: {}", vol.print());
     }
 
     // Made this for testing pulse_controller
