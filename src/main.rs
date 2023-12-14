@@ -30,39 +30,39 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    #[command(visible_aliases = ["increase", "inc", "i"])]
-    IncreaseVolume {
-        #[arg(short, long = "increment")]
-        #[arg(default_value = "5")]
-        #[arg(help = "The value to increase the volume by; uses default if not specified")]
-        inc: u8,
-
+    #[command(visible_aliases = ["vol", "v"])]
+    #[command(about = "Volume control, use volume --help for more info")]
+    Volume {
         #[arg(short, long)]
         #[arg(help = "Allow volume to go past 100; hard capped at 120 currently")]
         boost: bool,
-    },
-
-    #[command(visible_aliases = ["decrease", "dec", "d"])]
-    DecreaseVolume {
-        #[arg(short, long = "increment")]
-        #[arg(default_value = "5")]
-        #[arg(help = "The value to increase the volume by, if not specified it uses the default")]
-        inc: u8,
-    },
-
-    #[command(visible_aliases = ["set", "s"])]
-    SetVolume {
-        #[arg(short, long = "volume")]
-        #[arg(help = "The value (0-100) to set the volume to")]
-        vol: u8,
 
         #[arg(short, long)]
-        #[arg(help = "Allow volume to go past 100; hard capped at 120 currently")]
-        boost: bool,
-    },
+        #[arg(conflicts_with_all =  ["decrease", "toggle_mute", "set"])]
+        #[arg(default_value = "0")]
+        #[arg(num_args = 0..=1)]
+        #[arg(default_missing_value = "5")]
+        #[arg(help = "Increase volume by the specified amount, or default if not specified")]
+        increase: u8,
 
-    #[command(visible_aliases = ["toggle", "t"])]
-    ToggleMute,
+        #[arg(short, long)]
+        #[arg(conflicts_with_all =  ["increase", "toggle_mute", "set"])]
+        #[arg(default_value = "0")]
+        #[arg(num_args = 0..=1)]
+        #[arg(default_missing_value = "5")]
+        #[arg(help = "Decrease volume by the specified amount, or default if not specified")]
+        decrease: u8,
+
+        #[arg(short, long)]
+        #[arg(conflicts_with_all =  ["increase", "decrease", "set"])]
+        #[arg(help = "Mutes if not muted, unmutes if muted")]
+        toggle_mute: bool,
+
+        #[arg(short, long)]
+        #[arg(conflicts_with_all =  ["increase", "decrease", "toggle_mute"])]
+        #[arg(help = "Sets the volume to the specified value")]
+        set: Option<u8>,
+    },
 
     #[command(visible_alias = "p")]
     #[command(about = "Prints various data you may be interested in")]
@@ -117,15 +117,24 @@ fn main() -> Result<(), &'static str> {
                 pulse.print_sink_volume(cli.index, cli.name);
             }
         }
-        Commands::IncreaseVolume { inc, boost } => {
-            pulse.increase_sink_volume(inc, cli.index, cli.name, *boost);
-        }
-        Commands::DecreaseVolume { inc } => {
-            pulse.decrease_sink_volume(inc, cli.index, cli.name);
-        }
-        Commands::ToggleMute => pulse.toggle_mute(cli.index, cli.name),
-        Commands::SetVolume { vol, boost } => {
-            pulse.set_sink_volume(*vol, *boost, cli.index, cli.name)
+        Commands::Volume {
+            boost,
+            increase,
+            decrease,
+            toggle_mute,
+            set,
+        } => {
+            if *increase > 0 {
+                pulse.increase_sink_volume(increase, cli.index, cli.name, *boost);
+            } else if *decrease > 0 {
+                pulse.decrease_sink_volume(decrease, cli.index, cli.name);
+            } else if *toggle_mute {
+                pulse.toggle_mute(cli.index, cli.name);
+            } else if set.is_some() {
+                pulse.set_sink_volume(set.unwrap(), *boost, cli.index, cli.name);
+            } else {
+                println!("No action was specified")
+            }
         }
         #[cfg(feature = "extractor")]
         Commands::Extractor { one_percent } => {

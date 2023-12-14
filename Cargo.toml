@@ -1,6 +1,7 @@
 [package]
 name = "rupamix"
-version = "0.7.1"
+version = "1.0.0"
+
 edition = "2021"
 authors = ["Paulo Guimaraes"]
 description = "Rust PA Mixer is a cli tool for interfacing with Pulse Audio"
