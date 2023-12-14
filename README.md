@@ -33,7 +33,7 @@ To increase the audio by N:
     
     rupamix volume --increase <N>
 
-To decrease the audio py the defualt 5:
+To decrease the audio by the defualt 5:
     
     rupamix volume --decrease
     
@@ -66,4 +66,6 @@ Then update a sink like the following:
 
 OR
 
+
     rupamix --name alsa_output.pci-0000_0b_00.4.iec958-stereo volume --increase 10
+
