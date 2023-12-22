@@ -120,3 +120,233 @@ pub trait Device<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pulse::volume::VolumeDB;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    static APPRROX_54_PCT: VolumeDB = VolumeDB(-16.01);
+
+    struct MockDev {
+        volume: Rc<RefCell<ChannelVolumes>>,
+        base_volume: Rc<RefCell<Volume>>,
+    }
+
+    impl Device<MockDev> for MockDev {
+        fn index(&self) -> u32 {
+            1
+        }
+
+        fn name(&self) -> &str {
+            "Mock Device"
+        }
+
+        fn volume(&self) -> Rc<RefCell<ChannelVolumes>> {
+            self.volume.clone()
+        }
+
+        fn base_volume(&self) -> Rc<RefCell<Volume>> {
+            self.base_volume.clone()
+        }
+
+        fn description(&self) -> &str {
+            "Description"
+        }
+    }
+
+    fn setup() -> MockDev {
+        let base_volume = Rc::new(RefCell::new(Volume::from(VolumeDB(-16.1))));
+        let mut volume = ChannelVolumes::default();
+        volume.set(2_u8, Volume::from(APPRROX_54_PCT));
+        let volume = Rc::new(RefCell::new(volume));
+        MockDev {
+            volume,
+            base_volume,
+        }
+    }
+
+    #[test]
+    fn test_get_vol_as_pct() {
+        let mock_dev = setup();
+        let result = mock_dev.get_volume_as_pct();
+
+        assert_eq!(54_u8, result);
+    }
+
+    // These pct I'm using ~54 and ~1 are just that. So we should test many values to know if we need to reduce
+    // thet DBs of ~1pct. It should work fine if ~1% is less than 1%
+    // Note: we are not counting the loops to see if we are using extra loops to get us to our final place, maybe we
+    // should.
+    #[test]
+    fn test_increase_vol_by_5() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&5, false);
+
+        assert_eq!(59, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_increase_vol_by_10() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&10, false);
+
+        assert_eq!(64, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_increase_vol_by_15() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&15, false);
+
+        assert_eq!(69, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_increase_vol_by_20() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&20, false);
+
+        assert_eq!(74, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_decrease_vol_by_5() {
+        let mut mock_dev = setup();
+        mock_dev.decrease_volume(&5);
+
+        assert_eq!(49, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_decrease_vol_by_10() {
+        let mut mock_dev = setup();
+        mock_dev.decrease_volume(&10);
+
+        assert_eq!(44, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_decrease_vol_by_15() {
+        let mut mock_dev = setup();
+        mock_dev.decrease_volume(&15);
+
+        assert_eq!(39, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_decrease_vol_by_20() {
+        let mut mock_dev = setup();
+        mock_dev.decrease_volume(&20);
+
+        assert_eq!(34, mock_dev.get_volume_as_pct());
+    }
+
+    // Lets test the two extremes
+    #[test]
+    fn test_increase_vol_by_46() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&46, false);
+
+        assert_eq!(MAX_VOLUME, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_decrease_vol_by_54() {
+        let mut mock_dev = setup();
+        mock_dev.decrease_volume(&54);
+
+        assert_eq!(0, mock_dev.get_volume_as_pct());
+    }
+
+    // These should give the same results as the last two
+    #[test]
+    fn test_increase_vol_by_56() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&56, false);
+
+        assert_eq!(MAX_VOLUME, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_decrease_vol_by_64() {
+        let mut mock_dev = setup();
+        mock_dev.decrease_volume(&64);
+
+        assert_eq!(0, mock_dev.get_volume_as_pct());
+    }
+
+    // Now lets boost shizz!
+    #[test]
+    fn test_increase_vol_by_50() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&50, true);
+
+        assert_eq!(104, mock_dev.get_volume_as_pct());
+    }
+
+    // Too the max!
+    #[test]
+    fn test_increase_vol_by_66() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&66, true);
+
+        assert_eq!(MAX_VOLUME_BOOSTED, mock_dev.get_volume_as_pct());
+    }
+
+    // Lets overflow it!
+    #[test]
+    fn test_increase_vol_by_255() {
+        let mut mock_dev = setup();
+        mock_dev.increase_volume(&255, true);
+
+        assert_eq!(MAX_VOLUME_BOOSTED, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_increase() {
+        let mut mock_dev = setup();
+        let vol = 65;
+        let boost = false;
+
+        mock_dev.set_volume(vol, boost);
+
+        assert_eq!(vol, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_increase_mega() {
+        let mut mock_dev = setup();
+        let vol = 150;
+        let boost = false;
+
+        mock_dev.set_volume(vol, boost);
+
+        // 100 is max without boost
+        assert_eq!(MAX_VOLUME, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_increase_mega_boost() {
+        let mut mock_dev = setup();
+        let vol = 150;
+        let boost = false;
+
+        mock_dev.set_volume(vol, boost);
+
+        // 100 is max without boost
+        assert_eq!(MAX_VOLUME, mock_dev.get_volume_as_pct());
+    }
+
+    #[test]
+    fn test_set_volume_decrease() {
+        let mut mock_dev = setup();
+        let vol = 20;
+        let boost = false;
+
+        mock_dev.set_volume(vol, boost);
+
+        assert_eq!(vol, mock_dev.get_volume_as_pct());
+    }
+}
